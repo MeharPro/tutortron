@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TutorTron - Teacher Registration</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Include styles from index.html */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TutorTron Teacher Registration</h1>
+        
+        <div class="auth-container">
+            <h2>Create Teacher Account</h2>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="registerName">Full Name</label>
+                    <input type="text" id="registerName" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Email</label>
+                    <input type="email" id="registerEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <input type="password" id="registerPassword" required minlength="8">
+                </div>
+                <div class="form-group">
+                    <label for="registerSchool">School Name</label>
+                    <input type="text" id="registerSchool" required>
+                </div>
+                <div class="form-group">
+                    <label for="accessCode">Access Code</label>
+                    <input type="text" id="accessCode" required>
+                </div>
+                <button type="submit">Create Account</button>
+                <div id="registerMessage"></div>
+            </form>
+        </div>
+    </div>
+
+    <script src="css.js"></script>
+    <script src="register.js"></script>
+</body>
+</html> 

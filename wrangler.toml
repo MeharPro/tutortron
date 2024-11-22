@@ -1,0 +1,14 @@
+name = "tutortron"
+main = "server.js"
+compatibility_date = "2024-01-01"
+
+# Environment variables
+[vars]
+OPENROUTER_API_KEY = ""
+DEEPGRAM_API_KEY = ""
+
+# First create the D1 database, then add its configuration
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "tutortron-db"
+# database_id = "" # This will be filled after creating the database

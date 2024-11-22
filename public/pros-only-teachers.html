@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TutorTron - Teacher Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Include all existing styles from index.html */
+        /* ... existing styles ... */
+
+        .prompt-form {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .generated-links {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        .link-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: var(--background-color);
+        }
+
+        .link-card h3 {
+            margin: 0 0 0.5rem 0;
+            color: var(--primary-color);
+        }
+
+        .link-url {
+            background: #f1f5f9;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 0.5rem 0;
+            word-break: break-all;
+        }
+
+        .copy-link-btn {
+            background-color: #059669;
+            padding: 8px 16px;
+            font-size: 0.875rem;
+        }
+
+        .delete-link-btn {
+            background-color: #dc2626;
+            padding: 8px 16px;
+            font-size: 0.875rem;
+            margin-left: 0.5rem;
+        }
+
+        .prompt-preview {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+
+        #subjectInput {
+            width: 100%;
+            padding: 0.5rem;
+            margin-bottom: 1rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TutorTron Teacher Dashboard</h1>
+        
+        <div class="prompt-form">
+            <h2>Create Custom Tutor Link</h2>
+            <label for="subjectInput">Subject/Topic:</label>
+            <input type="text" id="subjectInput" placeholder="e.g., Computer Engineering, Advanced Mathematics">
+            
+            <label for="promptInput">Custom Prompt:</label>
+            <textarea id="promptInput" placeholder="Describe how you want the AI tutor to behave and what subject matter it should focus on..."></textarea>
+            
+            <button id="createLinkBtn">Create Tutor Link</button>
+            <p class="waiting-text">The prompt will be refined by AI before creating the link.</p>
+        </div>
+
+        <div class="generated-links">
+            <h2>Your Custom Tutor Links</h2>
+            <div id="linksList">
+                <!-- Links will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="css.js"></script>
+    <script src="teacher-dashboard.js"></script>
+</body>
+</html> 

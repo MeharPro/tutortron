@@ -1,0 +1,23 @@
+{
+  "name": "tutortron",
+  "version": "1.0.0",
+  "description": "TutorTron Teacher Dashboard",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@cfworker/web": "^1.12.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^7.6.3"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

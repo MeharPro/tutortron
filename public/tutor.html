@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TutorTron AI Tutor</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --background-color: #f8fafc;
+            --text-color: #1e293b;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .chat-container {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            height: 60vh;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+
+        .user-message {
+            background: #e2e8f0;
+            margin-left: auto;
+        }
+
+        .ai-message {
+            background: #f0f9ff;
+            margin-right: auto;
+        }
+
+        .error-message {
+            background: #fee2e2;
+            color: #dc2626;
+            margin: 10px auto;
+            text-align: center;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 1rem;
+            resize: vertical;
+            min-height: 20px;
+            max-height: 150px;
+        }
+
+        #sendMessage {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        #sendMessage:hover {
+            background-color: #1d4ed8;
+        }
+
+        .loading-animation {
+            background: linear-gradient(45deg, #2563eb, #3b82f6, #60a5fa, #93c5fd);
+            background-size: 400% 400%;
+            animation: gradient 2s ease infinite;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            color: white;
+            font-weight: 500;
+            margin: 10px 0;
+            display: none;
+        }
+
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .loading-text {
+            font-size: 1.2rem;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .loading-dots::after {
+            content: '';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80% { content: '...'; }
+            100% { content: ''; }
+        }
+
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        #speakButton {
+            background-color: #4b5563;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.3s ease;
+        }
+
+        #speakButton:hover {
+            background-color: #374151;
+        }
+
+        #speakButton.speaking {
+            background-color: #dc2626;
+        }
+
+        #speakButton.speaking:hover {
+            background-color: #b91c1c;
+        }
+
+        #copyButton {
+            background-color: #059669;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        #copyButton:hover {
+            background-color: #047857;
+        }
+
+        .copy-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #059669;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 6px;
+            animation: fadeOut 2s forwards;
+            display: none;
+        }
+
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            70% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TutorTron AI Tutor</h1>
+        <h2 id="subjectTitle"></h2>
+        
+        <div class="chat-container" id="chatContainer">
+            <!-- Messages will be appended here -->
+        </div>
+
+        <div class="loading-animation" id="loading">
+            <div class="loading-text">
+                Tron is thinking<span class="loading-dots"></span>
+            </div>
+        </div>
+
+        <div class="input-container">
+            <textarea 
+                id="messageInput" 
+                placeholder="Type your message here..."
+                rows="3"
+            ></textarea>
+            <button id="sendMessage">Send</button>
+        </div>
+
+        <div class="button-group">
+            <button id="speakButton">
+                <span>🔊</span> Speak Response
+            </button>
+            <button id="copyButton">
+                <span>📋</span> Copy Chat
+            </button>
+        </div>
+    </div>
+
+    <script src="../css.js"></script>
+    <script src="../tutor.js"></script>
+</body>
+</html> 
