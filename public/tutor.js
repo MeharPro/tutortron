@@ -205,8 +205,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // First protect code blocks from other formatting
         const codeBlocks = [];
-        content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
-            const normalizedLang = lang ? languageAliases[lang] || lang.toLowerCase() : '';
+        content = content.replace(/```([\w+]+)?\s*([\s\S]*?)```/g, (match, lang, code) => {
+            const normalizedLang = lang ? languageAliases[lang.trim()] || lang.toLowerCase() : '';
             codeBlocks.push({ language: normalizedLang, code: code.trim() });
             return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
         });
@@ -230,7 +230,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Restore code blocks with syntax highlighting
         content = content.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
             const block = codeBlocks[parseInt(index)];
-            return `<pre><code class="language-${block.language}">${escapeHtml(block.code)}</code></pre>`;
+            const formattedCode = block.code
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            return `<pre><code class="language-${block.language}">${formattedCode}</code></pre>`;
         });
 
         return content;
