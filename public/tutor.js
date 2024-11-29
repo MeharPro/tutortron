@@ -118,23 +118,25 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Function to create and append a message
         function formatMathContent(content) {
-            // Format bullet points
-            content = content.replace(/^\* /gm, '• ');
+            // Split content into sections
+            let sections = content.split('\n\n');
             
-            // Format step headers
-            content = content.replace(/^Step (\d+)/gm, '\nStep $1');
+            // Format the information section
+            if (sections[0].startsWith('The information')) {
+                sections[0] = sections[0].replace(/^\* /gm, '• ');
+            }
             
-            // Format LaTeX equations
-            content = content.replace(/\\tan/g, 'tan');  // Simplify tan notation
-            content = content.replace(/\\left/g, '');    // Remove \left
-            content = content.replace(/\\right/g, '');   // Remove \right
-            content = content.replace(/\\\((.*?)\\\)/g, '$1');
-            content = content.replace(/\\\[(.*?)\\\]/g, '$1');
+            // Format steps
+            sections = sections.map(section => {
+                if (section.startsWith('## Step')) {
+                    // Keep the markdown header and add spacing
+                    return section;
+                }
+                return section;
+            });
             
-            // Format final answer
-            content = content.replace(/Final Answer: (.*)$/, 'Final Answer: $1');
-            
-            return content;
+            // Join sections with double line breaks
+            return sections.join('\n\n');
         }
 
         function appendMessage(type, content) {
@@ -142,17 +144,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             messageDiv.className = `message ${type}-message`;
             
             if (type === 'ai') {
-                // Check if content contains math
-                if (content.includes('\\') || content.includes('$')) {
-                    content = formatMathContent(content);
-                }
+                // Format content
+                content = formatMathContent(content);
                 
-                // Convert markdown
+                // Convert markdown to HTML with proper spacing
                 content = content
-                    .replace(/\n/g, '<br>')
-                    .replace(/^• (.*)/gm, '<span class="bullet">•</span> $1');
+                    .replace(/^## (.*?)$/gm, '<h3>$1</h3>')  // Step headers
+                    .replace(/^• (.*?)$/gm, '<div class="bullet">• $1</div>')  // Bullets
+                    .replace(/\n\n/g, '</div><div class="paragraph">')  // Paragraphs
+                    .replace(/\$\\boxed{(.*?)}\$/g, '<div class="boxed">$1</div>');  // Boxed answer
                 
-                messageDiv.innerHTML = content;
+                messageDiv.innerHTML = `<div class="paragraph">${content}</div>`;
                 
                 // Process math
                 if (window.MathJax) {
@@ -166,31 +168,35 @@ document.addEventListener("DOMContentLoaded", async () => {
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        // Add minimal styling
-        const style = document.createElement('style');
-        style.textContent = `
-            .message {
-                margin: 10px;
-                padding: 10px;
-                border-radius: 8px;
-                max-width: 80%;
-                font-size: 14px;
-                line-height: 1.5;
-            }
-            .user-message {
-                background: #e9ecef;
-                margin-left: auto;
-            }
-            .ai-message {
-                background: #f8f9fa;
-                margin-right: auto;
+        // Add math formatting styles while keeping original styling
+        const mathStyle = document.createElement('style');
+        mathStyle.textContent = `
+            .paragraph {
+                margin: 12px 0;
             }
             .bullet {
-                color: #666;
-                margin-right: 5px;
+                margin: 8px 0;
+                padding-left: 8px;
+            }
+            h3 {
+                margin: 16px 0 8px 0;
+                font-size: 15px;
+                font-weight: 600;
+                color: #333;
+            }
+            .boxed {
+                margin: 12px 0;
+                padding: 8px;
+                border: 1px solid rgba(0, 0, 0, 0.1);
+                border-radius: 4px;
+                display: inline-block;
+                background: rgba(255, 255, 255, 0.5);
+            }
+            .ai-message .MathJax {
+                font-size: 14px !important;
             }
         `;
-        document.head.appendChild(style);
+        document.head.appendChild(mathStyle);
 
         // Handle sending messages
         sendButton.addEventListener('click', sendMessage);
