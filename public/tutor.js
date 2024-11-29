@@ -150,6 +150,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Content formatting functions
     function formatMathContent(content) {
+        // First protect code blocks from other formatting
+        const codeBlocks = [];
+        content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+            codeBlocks.push({ language: lang || '', code: code.trim() });
+            return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+        });
+
         // Handle LaTeX delimiters
         content = content
             .replace(/\\\((.*?)\\\)/g, '$ $1 $')
@@ -166,7 +173,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             .replace(/\n\n/g, '<br><br>')
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
+        // Restore code blocks with syntax highlighting
+        content = content.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
+            const block = codeBlocks[parseInt(index)];
+            return `<pre><code class="language-${block.language}">${escapeHtml(block.code)}</code></pre>`;
+        });
+
         return content;
+    }
+
+    // Helper function to escape HTML special characters
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     function appendMessage(type, content) {
@@ -182,11 +202,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             messageDiv.innerHTML = `<div class="paragraph">${content}</div>`;
             
+            // Process MathJax
             if (mathJaxReady && window.MathJax?.typesetPromise) {
                 window.MathJax.typesetPromise([messageDiv]).catch(err => 
                     console.error('MathJax error:', err)
                 );
             }
+
+            // Initialize syntax highlighting for code blocks
+            messageDiv.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
         } else {
             messageDiv.textContent = content;
         }
@@ -194,6 +220,28 @@ document.addEventListener("DOMContentLoaded", async () => {
         chatContainer.appendChild(messageDiv);
         chatContainer.scrollTop = chatContainer.scrollHeight;
     }
+
+    // Add syntax highlighting styles
+    const codeStyle = document.createElement('style');
+    codeStyle.textContent = `
+        pre {
+            background-color: #1e1e1e;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        code {
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .hljs {
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+    `;
+    document.head.appendChild(codeStyle);
 
     // Text-to-speech functionality
     async function speak(text) {
