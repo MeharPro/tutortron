@@ -116,26 +116,56 @@ document.addEventListener("DOMContentLoaded", async () => {
             loadingDiv.style.display = 'none';
         }
 
-        // Add MathJax configuration
+        // Add MathJax configuration before loading the script
         window.MathJax = {
+            loader: {load: ['[tex]/ams']},
             tex: {
                 inlineMath: [['$', '$']],
                 displayMath: [['$$', '$$']],
                 processEscapes: true,
-                packages: ['base', 'ams', 'noerrors', 'noundefined']
-            },
-            options: {
-                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+                packages: {'[+]': ['ams']}
             },
             startup: {
-                ready: () => {
+                ready() {
                     MathJax.startup.defaultReady();
-                    MathJax.startup.promise.then(() => {
-                        console.log('MathJax initial typesetting complete');
-                    });
                 }
             }
         };
+
+        // Load MathJax script
+        const loadMathJax = () => {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+                script.async = true;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        };
+
+        // Function to typeset math with retry
+        async function typesetMath(element) {
+            let retries = 0;
+            const maxRetries = 5;
+            
+            while (retries < maxRetries) {
+                try {
+                    if (window.MathJax && window.MathJax.typesetPromise) {
+                        await window.MathJax.typesetPromise([element]);
+                        return;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    retries++;
+                } catch (error) {
+                    console.error('MathJax error:', error);
+                    retries++;
+                    if (retries === maxRetries) {
+                        console.error('Failed to render math after', maxRetries, 'attempts');
+                    }
+                }
+            }
+        }
 
         function formatMathContent(content) {
             // Convert LaTeX delimiters
@@ -166,16 +196,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 content = content
                     .replace(/^Step (\d+)/gm, '<h3>Step $1</h3>')
                     .replace(/^• (.*?)$/gm, '<div class="bullet">• $1</div>')
-                    .replace(/<br><br>/g, '</div><div class="paragraph">');
+                    .replace(/<br><br>/g, '</div><div class="paragraph">')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
                 
                 messageDiv.innerHTML = `<div class="paragraph">${content}</div>`;
                 
-                // Process math
-                if (window.MathJax) {
-                    window.MathJax.typesetPromise([messageDiv]).catch(err => 
-                        console.error('MathJax error:', err)
-                    );
-                }
+                // Process math with retry
+                typesetMath(messageDiv).catch(err => 
+                    console.error('Failed to typeset math:', err)
+                );
             } else {
                 messageDiv.textContent = content;
             }
@@ -491,7 +520,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             speakButton.textContent = '🔇 Stop Speaking';
             speakButton.style.backgroundColor = '#dc2626';
         } else {
-            speakButton.textContent = '🔊 Speak Response';
+            speakButton.textContent = '�� Speak Response';
             speakButton.style.backgroundColor = '#4b5563';
         }
     }
@@ -565,4 +594,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             reader.readAsDataURL(file);
         }
     });
+
+    // Load MathJax at startup
+    loadMathJax().catch(err => 
+        console.error('Failed to load MathJax:', err)
+    );
 }); 
