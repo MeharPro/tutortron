@@ -20,7 +20,7 @@ async function serveStaticFile(url, env) {
       path = path.split('/').pop();
     } else {
       // For the HTML page itself
-      path = 'tutor.html';
+      path = 'pros-only-teachers.html';
     }
   }
   
