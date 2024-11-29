@@ -10,8 +10,14 @@ const corsHeaders = {
 
 // Function to serve static files
 async function serveStaticFile(url, env) {
-  const path = url.pathname.slice(1) || 'index.html';
+  // Clean and normalize the path
+  let path = url.pathname.slice(1) || 'index.html';
   console.log('Attempting to serve file:', path);
+  
+  // Handle pros-only-teachers page
+  if (path === 'pros-only-teachers' || path === 'pros-only-teachers/') {
+    path = 'pros-only-teachers.html';
+  }
   
   try {
     const file = await env.FILES.get(path);
