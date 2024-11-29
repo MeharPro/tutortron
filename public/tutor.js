@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
     
     const models = [
+        VISION_MODEL,  // Add vision model as first priority
         "google/learnlm-1.5-pro-experimental:free",
         "openchat/openchat-7b:free",
         "liquid/lfm-40b:free",
@@ -217,93 +218,62 @@ document.addEventListener("DOMContentLoaded", async () => {
             try {
                 if (currentImage) {
                     console.log("Processing image request with vision model:", VISION_MODEL);
-                    // If image is present, use vision model
-                    const visionMessages = [
-                        { 
-                            role: "system", 
-                            content: "You are Tutor-Tron, an AI that can see and analyze images. Help the user understand the image content and answer their questions about it."
+                    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                        method: "POST",
+                        headers: {
+                            Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                            "Content-Type": "application/json"
                         },
-                        {
-                            role: "user",
-                            content: [
+                        body: JSON.stringify({
+                            model: VISION_MODEL,
+                            messages: [
                                 {
-                                    type: "image_url",
-                                    image_url: {
-                                        url: `data:image/jpeg;base64,${currentImage}`
-                                    }
-                                },
-                                {
-                                    type: "text",
-                                    text: message
+                                    role: "user",
+                                    content: [
+                                        {
+                                            type: "text",
+                                            text: message
+                                        },
+                                        {
+                                            type: "image_url",
+                                            image_url: {
+                                                url: `data:image/jpeg;base64,${currentImage}`
+                                            }
+                                        }
+                                    ]
                                 }
                             ]
-                        }
-                    ];
+                        })
+                    });
 
-                    console.log("Sending request to vision model...");
-                    try {
-                        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                            method: "POST",
-                            headers: {
-                                Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                                "Content-Type": "application/json",
-                                "HTTP-Referer": window.location.origin,
-                                "X-Title": "Tutor-Tron"
-                            },
-                            body: JSON.stringify({
-                                model: VISION_MODEL,
-                                messages: visionMessages,
-                                max_tokens: 1024,
-                                temperature: 0.7,
-                                top_p: 0.9,
-                                stream: false
-                            })
-                        });
-
-                        if (!response.ok) {
-                            console.error("Vision model response not OK:", await response.text());
-                            throw new Error('Vision model failed');
-                        }
-
-                        const data = await response.json();
-                        console.log("Vision model response:", data);
-                        
-                        if (!data.choices?.[0]?.message?.content?.trim()) {
-                            console.error("Empty or invalid response from vision model");
-                            throw new Error('Empty response from vision model');
-                        }
-
-                        const aiMessage = data.choices[0].message.content.trim();
-                        console.log("AI Message:", aiMessage);
-                        
-                        if (aiMessage) {
-                            // Add to history - store as text only for future context
-                            conversationHistory.push({
-                                role: "user",
-                                content: `[Image uploaded] ${message}`
-                            });
-                            conversationHistory.push({ 
-                                role: "assistant", 
-                                content: aiMessage 
-                            });
-                            
-                            // Ensure the message is displayed
-                            appendMessage('ai', aiMessage);
-                        } else {
-                            throw new Error('Empty response from vision model');
-                        }
-                        
-                    } catch (error) {
-                        console.error("Vision model error:", error);
-                        appendMessage('error', 'Failed to process image. Please try again.');
+                    if (!response.ok) {
+                        throw new Error('Vision model failed');
                     }
 
-                    // Reset image state but keep the conversation history
+                    const data = await response.json();
+                    console.log("Vision model response:", data);
+
+                    if (!data.choices?.[0]?.message?.content) {
+                        throw new Error('Empty response from vision model');
+                    }
+
+                    const aiMessage = data.choices[0].message.content;
+                    conversationHistory.push({
+                        role: "user",
+                        content: `[Image uploaded] ${message}`
+                    });
+                    conversationHistory.push({
+                        role: "assistant",
+                        content: aiMessage
+                    });
+                    
+                    appendMessage('ai', aiMessage);
+
+                    // Reset image state
                     currentImage = null;
                     imageButton.style.backgroundColor = '';
                     imageButton.textContent = 'Add Image';
-                    imageInput.value = ''; // Clear the file input
-                    
+                    imageInput.value = '';
                 } else {
                     // No image - use regular models with retry logic
                     let success = false;
@@ -347,8 +317,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     }
                 }
             } catch (error) {
-                console.error('Error:', error);
-                showError('Failed to get response from AI. Please try again.');
+                console.error("Vision model error:", error);
+                appendMessage('error', 'Failed to process image. Please try again.');
             }
         }
 
