@@ -15,16 +15,10 @@ async function serveStaticFile(url, env) {
   console.log('Original request path:', url.pathname);
   console.log('Initial normalized path:', path);
   
-  // Handle pros-only-teachers page
-  if (path.startsWith('pros-only-teachers')) {
-    console.log('Detected pros-only-teachers request');
-    // If it's a CSS request, keep the CSS filename
-    if (path.endsWith('.css')) {
-      console.log('Serving CSS file:', path);
-    } else {
-      path = 'pros-only-teachers.html';
-      console.log('Serving pros-only-teachers.html');
-    }
+  // Special handling for pros-only-teachers
+  if (path === 'pros-only-teachers' || path === 'pros-only-teachers/') {
+    console.log('Redirecting to pros-only-teachers.html');
+    return Response.redirect(`${url.origin}/pros-only-teachers.html`, 302);
   }
   
   try {
