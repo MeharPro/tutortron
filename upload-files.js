@@ -9,6 +9,7 @@ const hashFile = '.file-hashes.json';
 // Essential files that need to be in KV storage
 const essentialFiles = [
     'index.html',
+    'upload-files.js',
     'tutor.html',
     'pros-only-teachers.html',
     'private-access-teachers-only.html',
