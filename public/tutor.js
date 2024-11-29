@@ -2,6 +2,42 @@ console.log('tutor.js loaded');
 document.addEventListener("DOMContentLoaded", async () => {
     await window.envLoaded;
     
+    // Get DOM elements
+    const chatContainer = document.getElementById('chatContainer');
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendMessage');
+    const loadingDiv = document.getElementById('loading');
+    
+    const conversationHistory = [];
+    let currentImage = null;
+
+    // Create image input elements
+    const imageInput = document.createElement('input');
+    imageInput.type = 'file';
+    imageInput.accept = 'image/*';
+    imageInput.style.display = 'none';
+
+    const imageButton = document.createElement('button');
+    imageButton.textContent = 'Add Image';
+    imageButton.className = 'image-button';
+    messageInput.parentNode.insertBefore(imageButton, sendButton);
+    messageInput.parentNode.insertBefore(imageInput, sendButton);
+
+    imageButton.addEventListener('click', () => imageInput.click());
+
+    imageInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentImage = e.target.result.split(',')[1]; // Get base64 part
+                imageButton.style.backgroundColor = '#4F46E5';
+                imageButton.textContent = 'Image Added';
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
     const pathParts = window.location.pathname.split('/');
     const mode = pathParts[pathParts.length - 2];  // Get mode from URL
     const linkId = pathParts[pathParts.length - 1];
