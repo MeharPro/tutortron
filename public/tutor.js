@@ -10,6 +10,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     const conversationHistory = [];
     let currentImage = null;
+    let isSpeaking = false;
+    let currentSpeech = null;
+
+    // Error tracking
+    let consoleErrors = [];
+    const originalConsoleError = console.error;
+    console.error = function() {
+        consoleErrors.push(Array.from(arguments).join(' '));
+        originalConsoleError.apply(console, arguments);
+        updateErrorButton();
+    };
+
+    function updateErrorButton() {
+        const button = document.getElementById('floatingErrorButton');
+        if (consoleErrors.length > 0) {
+            button.classList.add('has-errors');
+        } else {
+            button.classList.remove('has-errors');
+        }
+    }
 
     // Create image input elements
     const imageInput = document.createElement('input');
@@ -30,7 +50,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (file) {
             const reader = new FileReader();
             reader.onload = function(e) {
-                currentImage = e.target.result.split(',')[1]; // Get base64 part
+                currentImage = e.target.result.split(',')[1];
                 imageButton.style.backgroundColor = '#4F46E5';
                 imageButton.textContent = 'Image Added';
             };
@@ -39,8 +59,140 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     const pathParts = window.location.pathname.split('/');
-    const mode = pathParts[pathParts.length - 2];  // Get mode from URL
+    const mode = pathParts[pathParts.length - 2];
     const linkId = pathParts[pathParts.length - 1];
+
+    // Set mode-specific styling
+    document.body.classList.add(mode);
+    document.getElementById('modeTitle').textContent = 
+        `${mode.charAt(0).toUpperCase() + mode.slice(1)} - Tutor-Tron`;
+
+    // Text-to-speech functionality
+    async function speak(text) {
+        const DEEPGRAM_URL = "https://api.deepgram.com/v1/speak?model=aura-arcas-en";
+        
+        try {
+            const response = await fetch(DEEPGRAM_URL, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Token ${window.env.DEEPGRAM_API_KEY}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ text: text })
+            });
+
+            if (!response.ok) {
+                throw new Error('Text-to-speech request failed');
+            }
+
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            currentSpeech = audio;
+            
+            audio.onended = () => {
+                isSpeaking = false;
+                updateSpeakButton();
+                currentSpeech = null;
+            };
+
+            audio.play();
+        } catch (error) {
+            console.error('Error during text-to-speech:', error);
+            isSpeaking = false;
+            updateSpeakButton();
+        }
+    }
+
+    function updateSpeakButton() {
+        const speakButton = document.getElementById('speakButton');
+        if (isSpeaking) {
+            speakButton.textContent = '🔇 Stop Speaking';
+            speakButton.style.backgroundColor = '#dc2626';
+        } else {
+            speakButton.textContent = '🔊 Speak Response';
+            speakButton.style.backgroundColor = '#4b5563';
+        }
+    }
+
+    // Copy chat functionality
+    document.getElementById('copyButton').addEventListener('click', () => {
+        const messages = Array.from(chatContainer.children).map(msg => {
+            const role = msg.classList.contains('user-message') ? 'You' : 'Tutor';
+            return `${role}: ${msg.textContent}`;
+        });
+        
+        const chatText = messages.join('\n\n');
+        
+        navigator.clipboard.writeText(chatText).then(() => {
+            const notification = document.createElement('div');
+            notification.className = 'copy-notification';
+            notification.textContent = 'Chat copied to clipboard!';
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+            showError('Failed to copy chat to clipboard');
+        });
+    });
+
+    // Speak button handler
+    document.getElementById('speakButton').addEventListener('click', () => {
+        if (isSpeaking) {
+            if (currentSpeech) {
+                currentSpeech.pause();
+                currentSpeech = null;
+            }
+            isSpeaking = false;
+            updateSpeakButton();
+        } else {
+            const aiMessages = Array.from(chatContainer.children)
+                .filter(msg => msg.classList.contains('ai-message'));
+            
+            if (aiMessages.length > 0) {
+                const lastMessage = aiMessages[aiMessages.length - 1].textContent;
+                isSpeaking = true;
+                updateSpeakButton();
+                speak(lastMessage);
+            }
+        }
+    });
+
+    // Error reporting
+    async function reportError(error) {
+        try {
+            const timestamp = new Date().toISOString();
+            const errorReport = `[${timestamp}] Error: ${error}\n`;
+            
+            const response = await fetch('/api/report-error', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ error: errorReport })
+            });
+
+            if (response.ok) {
+                alert('Error reported successfully. Thank you!');
+            } else {
+                alert('Failed to report error. Please try again.');
+            }
+        } catch (err) {
+            console.error('Error reporting failed:', err);
+            alert('Failed to report error. Please try again.');
+        }
+    }
+
+    function showError(message) {
+        const errorContainer = document.getElementById('errorContainer');
+        const errorMessage = errorContainer.querySelector('.error-message');
+        errorMessage.textContent = message;
+        errorContainer.style.display = 'block';
+        document.getElementById('reportError').onclick = () => reportError(message);
+    }
 
     // Define vision model constant
     const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
@@ -54,6 +206,70 @@ document.addEventListener("DOMContentLoaded", async () => {
         "meta-llama/llama-3.1-405b-instruct:free",
         "qwen/qwen-2-7b-instruct:free"
     ];
+
+    try {
+        // Fetch tutor configuration
+        const response = await fetch(`/api/tutor/${linkId}`);
+        if (!response.ok) {
+            window.location.href = '/invalid-link.html';
+            return;
+        }
+        
+        const tutorConfig = await response.json();
+        document.getElementById('subjectTitle').textContent = tutorConfig.subject;
+        
+        // Set up system message
+        const systemMessage = `You are an AI teacher named "Tutor-Tron". ${tutorConfig.prompt}`;
+        conversationHistory.push({ role: "system", content: systemMessage });
+        
+        // Send initial prompt
+        loadingDiv.style.display = 'block';
+        let success = false;
+        let currentModelIndex = 0;
+
+        while (!success && currentModelIndex < models.length) {
+            try {
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        model: models[currentModelIndex],
+                        messages: [
+                            { role: "system", content: systemMessage },
+                            { role: "user", content: tutorConfig.prompt }
+                        ],
+                    }),
+                });
+
+                if (!response.ok) {
+                    currentModelIndex++;
+                    continue;
+                }
+
+                const data = await response.json();
+                const aiMessage = data.choices[0].message.content;
+                conversationHistory.push({ role: "assistant", content: aiMessage });
+                appendMessage('ai', aiMessage);
+                success = true;
+
+            } catch (error) {
+                console.error(`Error with model ${models[currentModelIndex]}:`, error);
+                currentModelIndex++;
+            }
+        }
+
+        if (!success) {
+            throw new Error('All models failed');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        appendMessage('error', 'Failed to initialize Tutor-Tron. Please try refreshing the page.');
+    } finally {
+        loadingDiv.style.display = 'none';
+    }
 
     // MathJax configuration
     window.MathJax = {
