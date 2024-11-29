@@ -5,8 +5,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const pathParts = window.location.pathname.split('/');
     const mode = pathParts[pathParts.length - 2];  // Get mode from URL
     const linkId = pathParts[pathParts.length - 1];
+
+    // Define vision model constant
+    const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
+    
     const models = [
-        "meta-llama/llama-3.2-90b-vision-instruct:free",
         "google/learnlm-1.5-pro-experimental:free",
         "openchat/openchat-7b:free",
         "liquid/lfm-40b:free",
