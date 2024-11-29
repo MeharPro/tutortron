@@ -524,7 +524,6 @@ router.get('/:mode/:linkId', async (request, env) => {
 router.get('/api/tutor/:linkId', async (request, env) => {
     try {
         const { linkId } = request.params;
-        
         let foundLink = null;
         const teachersList = await env.TEACHERS.list();
         
