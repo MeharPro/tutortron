@@ -12,18 +12,27 @@ const corsHeaders = {
 async function serveStaticFile(url, env) {
   // Just get the path without any processing
   const path = url.pathname.slice(1) || 'index.html';
+  console.log('Attempting to serve file:', path);
   
   try {
     const file = await env.FILES.get(path);
     if (file === null) {
+      console.log('File not found:', path);
       return new Response('Not Found', { status: 404 });
     }
     
     const contentType = getContentType(path);
-    return new Response(file, {
-      headers: { 'Content-Type': contentType }
-    });
+    console.log('Serving file:', path, 'with content type:', contentType);
+    
+    // Add cache control headers for CSS files
+    const headers = {
+      'Content-Type': contentType,
+      'Cache-Control': path.endsWith('.css') ? 'no-cache' : 'public, max-age=3600'
+    };
+    
+    return new Response(file, { headers });
   } catch (error) {
+    console.error('Error serving file:', path, error);
     return new Response('Internal Server Error', { status: 500 });
   }
 }
@@ -68,9 +77,13 @@ router.post('/api/report-error', async (request, env) => {
     }
 });
 
+// Handle CORS preflight requests
+router.options('*', () => new Response(null, { headers: corsHeaders }));
+
 // Handle all routes
 router.all('*', async (request, env) => {
   const url = new URL(request.url);
+  console.log('Incoming request for:', url.pathname);
   
   // API routes
   if (url.pathname.startsWith('/api/')) {
