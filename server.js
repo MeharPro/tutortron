@@ -17,8 +17,40 @@ async function serveStaticFile(url, env) {
   
   // Special handling for pros-only-teachers
   if (path === 'pros-only-teachers' || path === 'pros-only-teachers/') {
-    console.log('Redirecting to pros-only-teachers.html');
-    return Response.redirect(`${url.origin}/pros-only-teachers.html`, 302);
+    console.log('Serving pros-only-teachers page');
+    return new Response(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tutor-Tron - Teacher Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script defer src="/css.js"></script>
+    <script defer src="/teacher-dashboard.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Tutor-Tron Teacher Dashboard</h1>
+        <div class="mode-tabs">
+            <div class="mode-tab active" data-mode="investigator">Investigator Mode</div>
+            <div class="mode-tab" data-mode="comparitor">Comparitor Mode</div>
+            <div class="mode-tab" data-mode="quest">Quest Mode</div>
+            <div class="mode-tab" data-mode="codebreaker">Codebreaker Mode</div>
+            <div class="mode-tab" data-mode="eliminator">Eliminator Mode</div>
+        </div>
+        <div class="prompt-form">
+            <div id="linksList">
+                <!-- Links will be dynamically added here -->
+            </div>
+        </div>
+    </div>
+</body>
+</html>`, {
+      headers: {
+        'Content-Type': 'text/html',
+        'Cache-Control': 'no-cache'
+      }
+    });
   }
   
   try {
