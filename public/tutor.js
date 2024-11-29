@@ -24,127 +24,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     const style = document.createElement('style');
     style.textContent = `
         .message {
-            margin: 10px 0;
-            padding: 15px;
+            margin: 10px;
+            padding: 10px;
             border-radius: 8px;
             max-width: 80%;
-            word-wrap: break-word;
         }
-
         .user-message {
-            background-color: #e9ecef;
+            background: #e9ecef;
             margin-left: auto;
-            color: #000;
         }
-
         .ai-message {
-            background-color: #f8f9fa;
-            margin-right: auto;
-            color: #000;
-        }
-
-        .math-content {
-            font-family: system-ui, -apple-system, sans-serif;
-            line-height: 1.6;
-            padding: 20px;
-            background: #ffffff;
-            border: 1px solid #e1e4e8;
-            border-radius: 8px;
-            margin: 10px 0;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .math-content h1 {
-            color: #1a73e8;
-            font-size: 1.5em;
-            margin-bottom: 15px;
-            border-bottom: 2px solid #1a73e8;
-            padding-bottom: 5px;
-        }
-
-        .math-content h2 {
-            color: #202124;
-            font-size: 1.2em;
-            margin: 15px 0 10px 0;
-            font-weight: 500;
-        }
-
-        .math-content code {
-            background: #f1f3f4;
-            padding: 3px 6px;
-            border-radius: 4px;
-            font-family: 'Roboto Mono', monospace;
-            font-size: 0.9em;
-        }
-
-        .math-content .boxed {
-            border: 2px solid #1a73e8;
-            padding: 10px 15px;
-            margin: 10px 0;
-            display: inline-block;
-            border-radius: 4px;
             background: #f8f9fa;
+            margin-right: auto;
         }
-
-        .math-content strong {
-            color: #202124;
-            font-weight: 600;
-        }
-
-        .math-content p {
-            margin: 8px 0;
-            line-height: 1.6;
-        }
-
-        .math-content ul, .math-content ol {
-            margin: 8px 0 8px 20px;
-            padding-left: 15px;
-        }
-
-        .math-content li {
-            margin: 4px 0;
-        }
-
-        .math-content .katex {
-            font-size: 1.1em;
-        }
-
-        #chatContainer {
-            padding: 20px;
-            height: calc(100vh - 180px);
-            overflow-y: auto;
-            background: #ffffff;
-        }
-
-        #messageInput {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #dadce0;
-            border-radius: 8px;
-            font-size: 16px;
-            resize: none;
-            min-height: 40px;
-            max-height: 200px;
-            margin: 10px 0;
-        }
-
-        #sendMessage, .image-button {
-            padding: 8px 16px;
-            border-radius: 6px;
-            border: none;
-            background: #1a73e8;
-            color: white;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.2s;
-        }
-
-        #sendMessage:hover, .image-button:hover {
-            background: #1557b0;
-        }
-
-        .image-button {
-            margin-right: 10px;
+        code {
+            background: #f1f3f4;
+            padding: 2px 4px;
+            border-radius: 4px;
         }
     `;
     document.head.appendChild(style);
@@ -269,47 +165,18 @@ document.addEventListener("DOMContentLoaded", async () => {
             messageDiv.className = `message ${type}-message`;
             
             if (type === 'ai') {
-                // Check if content contains math markers
-                const hasMath = content.includes('\\') || content.includes('$') || 
-                              content.includes('\\boxed') || content.includes('\\frac');
-                
-                if (hasMath) {
-                    messageDiv.className += ' math-content';
-                }
-
-                // First, handle code blocks separately
-                content = content.replace(/```(\w+)?\s*([\s\S]*?)```/g, (match, lang, code) => {
-                    const cleanCode = code.trim()
-                        .replace(/^\n+|\n+$/g, '')
-                        .replace(/\t/g, '    ');
-                    
-                    let language = (lang || 'text').toLowerCase();
-                    if (language === 'c++') language = 'cpp';
-                    
-                    return `<pre><code class="language-${language}">${cleanCode}</code></pre>`;
-                });
-
-                // Then handle other markdown elements
+                // Convert markdown to HTML
                 content = content
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                     .replace(/`([^`]+)`/g, '<code>$1</code>')
-                    .replace(/^\* (.+)$/gm, '<li>$1</li>')
-                    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
-                    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-                    .replace(/(<li>.*<\/li>)/gs, '<ol>$1</ol>')
-                    .split('\n\n')
-                    .map(p => !p.includes('<pre>') ? `<p>${p}</p>` : p)
-                    .join('');
+                    .replace(/\n\n/g, '<br><br>');
                 
                 messageDiv.innerHTML = content;
                 
-                if (hasMath && window.MathJax) {
-                    window.MathJax.typesetPromise([messageDiv]).catch((err) => 
-                        console.error('MathJax error:', err)
-                    );
+                // Process math if present
+                if (window.MathJax && (content.includes('\\') || content.includes('$'))) {
+                    window.MathJax.typesetPromise([messageDiv]);
                 }
-
-                highlightCode(messageDiv);
             } else {
                 messageDiv.textContent = content;
             }
