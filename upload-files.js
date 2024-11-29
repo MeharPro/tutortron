@@ -48,10 +48,10 @@ let skipCount = 0;
 
 // Upload each modified essential file to KV
 files.forEach(file => {
-   // if (!fs.existsSync(file) || file.endsWith('.env')) {
-     //   console.log(`Skipping file: ${file}`);
-     //   return;
-    //}
+    if (!fs.existsSync(file) || file.endsWith('.env')) {
+        console.log(`Skipping file: ${file}`);
+        return;
+    }
 
     const relativePath = path.relative(publicDir, file).replace(/\\/g, '/');
     const currentHash = calculateHash(file);
