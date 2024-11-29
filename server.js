@@ -13,12 +13,14 @@ async function serveStaticFile(url, env) {
   // Clean and normalize the path
   let path = url.pathname.replace(/^\//, '');
   
-  // Handle pros-only-teachers case
-  if (path.includes('pros-only-teachers')) {
-    // If requesting CSS file from pros-only-teachers page
+  // Handle pros-only-teachers page
+  if (path.startsWith('pros-only-teachers')) {
     if (path.endsWith('.css')) {
-      path = path.split('/').pop(); // Just get the CSS filename
-      console.log('Serving CSS file:', path);
+      // For CSS files, just get the filename
+      path = path.split('/').pop();
+    } else {
+      // For the HTML page itself
+      path = 'tutor.html';
     }
   }
   
