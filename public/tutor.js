@@ -116,27 +116,42 @@ document.addEventListener("DOMContentLoaded", async () => {
             loadingDiv.style.display = 'none';
         }
 
-        // Function to create and append a message
-        function formatMathContent(content) {
-            // Split content into sections
-            let sections = content.split('\n\n');
-            
-            // Format the information section
-            if (sections[0].startsWith('The information')) {
-                sections[0] = sections[0].replace(/^\* /gm, '• ');
-            }
-            
-            // Format steps
-            sections = sections.map(section => {
-                if (section.startsWith('## Step')) {
-                    // Keep the markdown header and add spacing
-                    return section;
+        // Add MathJax configuration
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: true,
+                packages: ['base', 'ams', 'noerrors', 'noundefined']
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+            },
+            startup: {
+                ready: () => {
+                    MathJax.startup.defaultReady();
+                    MathJax.startup.promise.then(() => {
+                        console.log('MathJax initial typesetting complete');
+                    });
                 }
-                return section;
-            });
-            
-            // Join sections with double line breaks
-            return sections.join('\n\n');
+            }
+        };
+
+        function formatMathContent(content) {
+            // Convert LaTeX delimiters
+            content = content
+                .replace(/\\\((.*?)\\\)/g, '$ $1 $')
+                .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$');
+
+            // Format bullet points
+            content = content.replace(/^\* /gm, '• ');
+
+            // Ensure proper spacing
+            content = content
+                .replace(/\n\n/g, '<br><br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+            return content;
         }
 
         function appendMessage(type, content) {
@@ -147,18 +162,19 @@ document.addEventListener("DOMContentLoaded", async () => {
                 // Format content
                 content = formatMathContent(content);
                 
-                // Convert markdown to HTML with proper spacing
+                // Convert markdown to HTML
                 content = content
-                    .replace(/^## (.*?)$/gm, '<h3>$1</h3>')  // Step headers
-                    .replace(/^• (.*?)$/gm, '<div class="bullet">• $1</div>')  // Bullets
-                    .replace(/\n\n/g, '</div><div class="paragraph">')  // Paragraphs
-                    .replace(/\$\\boxed{(.*?)}\$/g, '<div class="boxed">$1</div>');  // Boxed answer
+                    .replace(/^Step (\d+)/gm, '<h3>Step $1</h3>')
+                    .replace(/^• (.*?)$/gm, '<div class="bullet">• $1</div>')
+                    .replace(/<br><br>/g, '</div><div class="paragraph">');
                 
                 messageDiv.innerHTML = `<div class="paragraph">${content}</div>`;
                 
                 // Process math
                 if (window.MathJax) {
-                    window.MathJax.typesetPromise([messageDiv]);
+                    window.MathJax.typesetPromise([messageDiv]).catch(err => 
+                        console.error('MathJax error:', err)
+                    );
                 }
             } else {
                 messageDiv.textContent = content;
@@ -168,9 +184,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        // Add math formatting styles while keeping original styling
+        // Add styling
         const mathStyle = document.createElement('style');
         mathStyle.textContent = `
+            .message {
+                margin: 10px;
+                padding: 10px;
+                border-radius: 8px;
+                max-width: 80%;
+                font-size: 14px;
+                line-height: 1.5;
+            }
             .paragraph {
                 margin: 12px 0;
             }
@@ -184,16 +208,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 font-weight: 600;
                 color: #333;
             }
-            .boxed {
-                margin: 12px 0;
-                padding: 8px;
-                border: 1px solid rgba(0, 0, 0, 0.1);
-                border-radius: 4px;
-                display: inline-block;
-                background: rgba(255, 255, 255, 0.5);
+            strong {
+                font-weight: 600;
+                color: #000;
             }
-            .ai-message .MathJax {
-                font-size: 14px !important;
+            .mjx-chtml {
+                margin: 0 3px !important;
             }
         `;
         document.head.appendChild(mathStyle);
