@@ -571,6 +571,27 @@ router.get('*', async (request, env) => {
     return new Response('Not Found', { status: 404 });
   }
   
+  // List of valid static files/paths
+  const validPaths = [
+    'index.html',
+    'tutor.html',
+    'pros-only-teachers.html',
+    'private-access-teachers-only.html',
+    'invalid-link.html',
+    'css.js',
+    'tutor.js',
+    'teacher-dashboard.js',
+    'register.js',
+    'index.js',
+    'tutor.css'
+  ];
+  
+  // Check if the requested path is valid
+  const path = url.pathname.replace(/^\//, '') || 'index.html';
+  if (!validPaths.includes(path) && !path.match(/^(investigator|comparitor|quest|codebreaker|eliminator)\/[0-9a-f-]+$/)) {
+    return Response.redirect('/invalid-link.html', 302);
+  }
+  
   // Serve static files
   return serveStaticFile(url, env);
 });
