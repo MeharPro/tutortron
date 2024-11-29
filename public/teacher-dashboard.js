@@ -341,21 +341,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             border-radius: 50%;
             background-color: #333;
             color: white;
-            font-family: serif;
-            font-style: italic;
-            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            font-weight: normal;
             line-height: 1;
             transition: all 0.2s ease;
         `;
-
-        // Add hover effect
-        infoIcon.addEventListener('mouseenter', () => {
-            infoIcon.style.backgroundColor = '#666';
-        });
-
-        infoIcon.addEventListener('mouseleave', () => {
-            infoIcon.style.backgroundColor = '#333';
-        });
 
         // Create tooltip
         const tooltip = document.createElement('div');
@@ -375,26 +365,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             transform: translateX(-50%);
             bottom: 125%;
             font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             opacity: 0;
             transition: opacity 0.3s;
             pointer-events: none;
             white-space: normal;
         `;
-
-        // Add arrow to tooltip
-        const arrow = document.createElement('div');
-        arrow.style.cssText = `
-            content: "";
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            margin-left: -5px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: #333 transparent transparent transparent;
-        `;
-        tooltip.appendChild(arrow);
-        infoIcon.appendChild(tooltip);
 
         // Add hover events
         infoIcon.addEventListener('mouseenter', () => {
@@ -422,6 +398,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         tab.appendChild(infoIcon);
+        tab.appendChild(tooltip);
     });
 });
 
