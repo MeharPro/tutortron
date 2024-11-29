@@ -12,14 +12,23 @@ const corsHeaders = {
 async function serveStaticFile(url, env) {
   // Clean and normalize the path
   let path = url.pathname.slice(1) || 'index.html';
-  console.log('Attempting to serve file:', path);
+  console.log('Original request path:', url.pathname);
+  console.log('Initial normalized path:', path);
   
   // Handle pros-only-teachers page
-  if (path === 'pros-only-teachers' || path === 'pros-only-teachers/') {
-    path = 'pros-only-teachers.html';
+  if (path.startsWith('pros-only-teachers')) {
+    console.log('Detected pros-only-teachers request');
+    // If it's a CSS request, keep the CSS filename
+    if (path.endsWith('.css')) {
+      console.log('Serving CSS file:', path);
+    } else {
+      path = 'pros-only-teachers.html';
+      console.log('Serving pros-only-teachers.html');
+    }
   }
   
   try {
+    console.log('Attempting to fetch file:', path);
     const file = await env.FILES.get(path);
     if (file === null) {
       console.log('File not found:', path);
@@ -27,7 +36,7 @@ async function serveStaticFile(url, env) {
     }
     
     const contentType = getContentType(path);
-    console.log('Serving file:', path, 'with content type:', contentType);
+    console.log('File found! Serving:', path, 'with content type:', contentType);
     
     const headers = {
       'Content-Type': contentType,
@@ -467,14 +476,17 @@ router.options('*', () => new Response(null, { headers: corsHeaders }));
 // Handle all routes
 router.all('*', async (request, env) => {
   const url = new URL(request.url);
-  console.log('Incoming request for:', url.pathname);
+  console.log('Incoming request URL:', request.url);
+  console.log('Pathname:', url.pathname);
   
   // API routes
   if (url.pathname.startsWith('/api/')) {
+    console.log('Handling API request');
     return router.handle(request, env);
   }
   
   // Serve static files
+  console.log('Handling static file request');
   return serveStaticFile(url, env);
 });
 
