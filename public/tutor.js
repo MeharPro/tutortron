@@ -116,34 +116,304 @@ document.addEventListener("DOMContentLoaded", async () => {
             loadingDiv.style.display = 'none';
         }
 
-        // MathJax configuration and loading
-        function initMathJax() {
-            window.MathJax = {
-                tex: {
-                    inlineMath: [['$', '$']],
-                    displayMath: [['$$', '$$']],
-                    processEscapes: true
-                },
-                options: {
-                    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+        // MathJax configuration
+        window.MathJax = {
+            loader: {load: ['[tex]/ams']},
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: true,
+                packages: {'[+]': ['ams']}
+            },
+            startup: {
+                ready() {
+                    MathJax.startup.defaultReady();
                 }
-            };
+            }
+        };
 
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js';
-            script.async = true;
-            document.head.appendChild(script);
+        // Function to load MathJax
+        function loadMathJax() {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+                script.async = true;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
         }
 
-        // Initialize MathJax
-        initMathJax();
+        // Load MathJax
+        try {
+            await loadMathJax();
+            console.log('MathJax loaded successfully');
+        } catch (err) {
+            console.error('Failed to load MathJax:', err);
+        }
 
-        // Rest of your code...
-        const pathParts = window.location.pathname.split('/');
-        // ... rest of existing code ...
+        // Function to typeset math with retry
+        async function typesetMath(element) {
+            let retries = 0;
+            const maxRetries = 5;
+            
+            while (retries < maxRetries) {
+                try {
+                    if (window.MathJax && window.MathJax.typesetPromise) {
+                        await window.MathJax.typesetPromise([element]);
+                        return;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    retries++;
+                } catch (error) {
+                    console.error('MathJax error:', error);
+                    retries++;
+                    if (retries === maxRetries) {
+                        console.error('Failed to render math after', maxRetries, 'attempts');
+                    }
+                }
+            }
+        }
 
-        // Remove this line that was causing the error
-        // initMathJax().catch(err => console.error('Failed to load MathJax:', err));
+        function formatMathContent(content) {
+            // Convert LaTeX delimiters
+            content = content
+                .replace(/\\\((.*?)\\\)/g, '$ $1 $')
+                .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$');
+
+            // Format bullet points
+            content = content.replace(/^\* /gm, '• ');
+
+            // Ensure proper spacing
+            content = content
+                .replace(/\n\n/g, '<br><br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+            return content;
+        }
+
+        function appendMessage(type, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            
+            if (type === 'ai') {
+                // Format content
+                content = formatMathContent(content);
+                
+                // Convert markdown to HTML
+                content = content
+                    .replace(/^Step (\d+)/gm, '<h3>Step $1</h3>')
+                    .replace(/^• (.*?)$/gm, '<div class="bullet">• $1</div>')
+                    .replace(/<br><br>/g, '</div><div class="paragraph">')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                
+                messageDiv.innerHTML = `<div class="paragraph">${content}</div>`;
+                
+                // Process math with retry
+                typesetMath(messageDiv).catch(err => 
+                    console.error('Failed to typeset math:', err)
+                );
+            } else {
+                messageDiv.textContent = content;
+            }
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Add styling
+        const mathStyle = document.createElement('style');
+        mathStyle.textContent = `
+            .message {
+                margin: 10px;
+                padding: 10px;
+                border-radius: 8px;
+                max-width: 80%;
+                font-size: 14px;
+                line-height: 1.5;
+            }
+            .paragraph {
+                margin: 12px 0;
+            }
+            .bullet {
+                margin: 8px 0;
+                padding-left: 8px;
+            }
+            h3 {
+                margin: 16px 0 8px 0;
+                font-size: 15px;
+                font-weight: 600;
+                color: #333;
+            }
+            strong {
+                font-weight: 600;
+                color: #000;
+            }
+            .mjx-chtml {
+                margin: 0 3px !important;
+            }
+        `;
+        document.head.appendChild(mathStyle);
+
+        // Handle sending messages
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Function to try different models
+        async function tryModels(messages, currentModelIndex = 0) {
+            if (currentModelIndex >= models.length) {
+                throw new Error('All models failed');
+            }
+
+            try {
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        model: models[currentModelIndex],
+                        messages: messages,
+                    }),
+                });
+
+                if (!response.ok) {
+                    // If this model fails, try the next one
+                    console.log(`Model ${models[currentModelIndex]} failed, trying next model...`);
+                    return tryModels(messages, currentModelIndex + 1);
+                }
+
+                const data = await response.json();
+                return data.choices[0].message.content;
+            } catch (error) {
+                // If this model errors, try the next one
+                console.log(`Error with model ${models[currentModelIndex]}, trying next model...`);
+                return tryModels(messages, currentModelIndex + 1);
+            }
+        }
+
+        // Modify the sendMessage function
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            appendMessage('user', message);
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            try {
+                if (currentImage) {
+                    console.log("Processing image request with vision model:", VISION_MODEL);
+                    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                        method: "POST",
+                        headers: {
+                            Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            model: VISION_MODEL,
+                            messages: [
+                                {
+                                    role: "user",
+                                    content: [
+                                        {
+                                            type: "text",
+                                            text: message
+                                        },
+                                        {
+                                            type: "image_url",
+                                            image_url: {
+                                                url: `data:image/jpeg;base64,${currentImage}`
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Vision model failed');
+                    }
+
+                    const data = await response.json();
+                    console.log("Vision model response:", data);
+
+                    if (!data.choices?.[0]?.message?.content) {
+                        throw new Error('Empty response from vision model');
+                    }
+
+                    const aiMessage = data.choices[0].message.content;
+                    conversationHistory.push({
+                        role: "user",
+                        content: `[Image uploaded] ${message}`
+                    });
+                    conversationHistory.push({
+                        role: "assistant",
+                        content: aiMessage
+                    });
+                    
+                    appendMessage('ai', aiMessage);
+
+                    // Reset image state
+                    currentImage = null;
+                    imageButton.style.backgroundColor = '';
+                    imageButton.textContent = 'Add Image';
+                    imageInput.value = '';
+                } else {
+                    // No image - use regular models with retry logic
+                    let success = false;
+                    let retries = 0;
+                    
+                    // Add text-only message to history
+                    conversationHistory.push({
+                        role: "user",
+                        content: message
+                    });
+
+                    while (!success && retries < models.length) {
+                        try {
+                            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                                method: "POST",
+                                headers: {
+                                    Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                                    "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                    model: models[retries],
+                                    messages: conversationHistory
+                                }),
+                            });
+
+                            if (!response.ok) throw new Error('Model failed');
+
+                            const data = await response.json();
+                            const aiMessage = data.choices[0].message.content;
+                            conversationHistory.push({ role: "assistant", content: aiMessage });
+                            appendMessage('ai', aiMessage);
+                            success = true;
+                        } catch (error) {
+                            console.error(`Error with model ${models[retries]}:`, error);
+                            retries++;
+                        }
+                    }
+
+                    if (!success) {
+                        throw new Error('All models failed');
+                    }
+                }
+            } catch (error) {
+                console.error("Vision model error:", error);
+                appendMessage('error', 'Failed to process image. Please try again.');
+            }
+        }
+
     } catch (error) {
         window.location.href = '/invalid-link.html';
         return;
