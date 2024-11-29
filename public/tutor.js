@@ -217,9 +217,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             try {
                 if (currentImage) {
-                    console.log("Processing image request with vision model:", VISION_MODEL);
+                    console.log("Processing image request...");
                     
-                    // Construct the vision message
                     const visionMessages = [
                         { 
                             role: "system", 
@@ -244,50 +243,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     ];
 
                     try {
-                        console.log("Sending request to vision model...");
-                        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                            method: "POST",
-                            headers: {
-                                Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                                "Content-Type": "application/json",
-                                "HTTP-Referer": window.location.origin,
-                                "X-Title": "Tutor-Tron"
-                            },
-                            body: JSON.stringify({
-                                model: VISION_MODEL,
-                                messages: visionMessages,
-                                max_tokens: 1024,
-                                temperature: 0.7,
-                                top_p: 0.9,
-                                stream: false,
-                                seed: Math.floor(Math.random() * 1000000)
-                            })
-                        });
-
-                        const responseText = await response.text();
-                        console.log("Raw response:", responseText);
-
-                        if (!response.ok) {
-                            console.error("Vision model error:", responseText);
-                            throw new Error(`Vision model failed: ${responseText}`);
-                        }
-
-                        const data = JSON.parse(responseText);
-                        console.log("Vision model full response:", JSON.stringify(data, null, 2));
-
-                        // Check for error in choices
-                        if (data.choices?.[0]?.error) {
-                            console.error("Model returned error:", data.choices[0].error);
-                            throw new Error(`Model error: ${data.choices[0].error.message}`);
-                        }
-                        
-                        if (!data.choices?.[0]?.message?.content?.trim()) {
-                            console.error("Empty response from vision model");
-                            throw new Error('Empty response from vision model');
-                        }
-
-                        const aiMessage = data.choices[0].message.content.trim();
-                        console.log("AI Message:", aiMessage);
+                        const aiMessage = await tryVisionModel(visionMessages);
                         
                         // Add to history and display
                         conversationHistory.push({
@@ -556,4 +512,82 @@ document.addEventListener("DOMContentLoaded", async () => {
             reader.readAsDataURL(file);
         }
     });
+
+    const VISION_MODELS = [
+        "meta-llama/llama-3.2-90b-vision-instruct:free"
+    ];
+
+    const TEXT_MODELS = [
+        "google/learnlm-1.5-pro-experimental:free",
+        "openchat/openchat-7b:free",
+        "liquid/lfm-40b:free",
+        "google/gemini-exp-1121:free",
+        "google/gemma-2-9b-it:free",
+        "meta-llama/llama-3.1-405b-instruct:free",
+        "qwen/qwen-2-7b-instruct:free"
+    ];
+
+    // Helper function to delay execution
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Helper function to try vision models with retry
+    async function tryVisionModel(visionMessages, retryCount = 0) {
+        for (const model of VISION_MODELS) {
+            try {
+                console.log(`Attempting vision model: ${model}, attempt ${retryCount + 1}`);
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": window.location.origin,
+                        "X-Title": "Tutor-Tron"
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: visionMessages,
+                        max_tokens: 1024,
+                        temperature: 0.7,
+                        top_p: 0.9,
+                        stream: false,
+                        seed: Math.floor(Math.random() * 1000000)
+                    })
+                });
+
+                const responseText = await response.text();
+                console.log(`Raw response from ${model}:`, responseText);
+
+                if (!response.ok) {
+                    const errorData = JSON.parse(responseText);
+                    if (errorData.error?.code === 429 && retryCount < 3) {
+                        // Rate limit hit, wait and retry
+                        const waitTime = Math.pow(2, retryCount) * 1000; // Exponential backoff
+                        console.log(`Rate limit hit, waiting ${waitTime}ms before retry...`);
+                        await delay(waitTime);
+                        return tryVisionModel(visionMessages, retryCount + 1);
+                    }
+                    throw new Error(`Model ${model} failed: ${responseText}`);
+                }
+
+                const data = JSON.parse(responseText);
+                
+                // Check for model-specific errors
+                if (data.choices?.[0]?.error) {
+                    console.error(`Error from ${model}:`, data.choices[0].error);
+                    continue; // Try next model
+                }
+
+                if (!data.choices?.[0]?.message?.content?.trim()) {
+                    console.error(`Empty response from ${model}`);
+                    continue; // Try next model
+                }
+
+                return data.choices[0].message.content.trim();
+            } catch (error) {
+                console.error(`Error with ${model}:`, error);
+                // Continue to next model
+            }
+        }
+        throw new Error('All vision models failed');
+    }
 }); 
