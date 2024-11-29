@@ -1,13 +1,9 @@
 const fs = require('fs');
-const path = require('path');
-const { exec } = require('child_process');
 const crypto = require('crypto');
+const { exec } = require('child_process');
 
-const publicDir = path.join(__dirname, 'public');
-const hashFile = '.file-hashes.json';
-
-// Essential files that need to be in KV storage
-const essentialFiles = [
+// List of files to upload from public directory
+const publicFiles = [
     'index.html',
     'tutor.html',
     'pros-only-teachers.html',
@@ -18,69 +14,61 @@ const essentialFiles = [
     'teacher-dashboard.js',
     'register.js',
     'index.js',
-    'tutor.css',
+    'tutor.css'
+];
+
+// List of files to upload from root directory
+const rootFiles = [
     'server.js'
 ];
 
-// Load previous file hashes
-let previousHashes = {};
-try {
-    if (fs.existsSync(hashFile)) {
-        previousHashes = JSON.parse(fs.readFileSync(hashFile, 'utf8'));
-    }
-} catch (error) {
-    console.log('No previous hash file found, will upload all essential files');
-}
-
 // Function to calculate file hash
-function calculateHash(filePath) {
-    const fileBuffer = fs.readFileSync(filePath);
-    const hashSum = crypto.createHash('sha256');
-    hashSum.update(fileBuffer);
-    return hashSum.digest('hex');
+function calculateHash(filePath, isRoot = false) {
+    try {
+        const content = fs.readFileSync(isRoot ? filePath : `public/${filePath}`);
+        return crypto.createHash('md5').update(content).digest('hex');
+    } catch (error) {
+        console.error(`Error reading file ${filePath}:`, error);
+        return null;
+    }
 }
 
-// Get all files from public directory
-const files = essentialFiles.map(file => path.join(publicDir, file));
-const currentHashes = {};
-let uploadCount = 0;
-let skipCount = 0;
+// Function to upload file using wrangler
+async function uploadFile(filePath, isRoot = false) {
+    const fullPath = isRoot ? filePath : `public/${filePath}`;
+    exec(`wrangler kv:key put --binding=FILES "${filePath}" --path="${fullPath}"`, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Error uploading ${filePath}:`, error);
+            return;
+        }
+        console.log(`Uploaded ${filePath}`);
+    });
+}
 
-// Upload each modified essential file to KV
-files.forEach(file => {
-    if (!fs.existsSync(file) || file.endsWith('.env')) {
-        console.log(`Skipping file: ${file}`);
-        return;
-    }
-
-    const relativePath = path.relative(publicDir, file).replace(/\\/g, '/');
-    const currentHash = calculateHash(file);
-    currentHashes[relativePath] = currentHash;
-
-    // Check if file has changed
-    if (previousHashes[relativePath] !== currentHash) {
-        const command = `npx wrangler kv:key put --binding=FILES "${relativePath}" --path="${file}"`;
-        
-        console.log(`Uploading modified file: ${relativePath}`);
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Error uploading ${relativePath}:`, error);
-                return;
-            }
-            console.log(`Successfully uploaded ${relativePath}`);
-            if (stderr) console.error(stderr);
-        });
-        uploadCount++;
-    } else {
-        console.log(`Skipping unchanged file: ${relativePath}`);
-        skipCount++;
+// Process public files
+publicFiles.forEach(file => {
+    const hash = calculateHash(file);
+    if (hash) {
+        const oldHash = process.env[`HASH_${file.replace(/\./g, '_')}`];
+        if (hash !== oldHash) {
+            uploadFile(file);
+            process.env[`HASH_${file.replace(/\./g, '_')}`] = hash;
+        } else {
+            console.log(`Skipping unchanged file: ${file}`);
+        }
     }
 });
 
-// Save current hashes for next time
-fs.writeFileSync(hashFile, JSON.stringify(currentHashes, null, 2));
-
-console.log(`\nUpload Summary:`);
-console.log(`Essential files checked: ${files.length}`);
-console.log(`Files uploaded: ${uploadCount}`);
-console.log(`Files skipped: ${skipCount}`); 
+// Process root files
+rootFiles.forEach(file => {
+    const hash = calculateHash(file, true);
+    if (hash) {
+        const oldHash = process.env[`HASH_${file.replace(/\./g, '_')}`];
+        if (hash !== oldHash) {
+            uploadFile(file, true);
+            process.env[`HASH_${file.replace(/\./g, '_')}`] = hash;
+        } else {
+            console.log(`Skipping unchanged file: ${file}`);
+        }
+    }
+}); 
