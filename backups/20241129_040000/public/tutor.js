@@ -42,20 +42,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             padding: 2px 4px;
             border-radius: 4px;
         }
-        .math-step {
-            margin: 8px 0;
-            font-size: 14px;
-        }
-        .math-step h2 {
-            font-size: 15px;
-            margin: 5px 0;
-            color: #333;
-        }
-        .math-final {
-            margin-top: 10px;
-            padding: 5px;
-            display: inline-block;
-        }
     `;
     document.head.appendChild(style);
 
@@ -179,14 +165,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             messageDiv.className = `message ${type}-message`;
             
             if (type === 'ai') {
-                // Convert markdown and add step classes
+                // Convert markdown to HTML
                 content = content
-                    .replace(/## Step \d+:/g, match => `<div class="math-step">${match}`)
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                     .replace(/`([^`]+)`/g, '<code>$1</code>')
-                    .replace(/\n\n/g, '</div><div class="math-step">');
+                    .replace(/\n\n/g, '<br><br>');
                 
-                messageDiv.innerHTML = content + '</div>';
+                messageDiv.innerHTML = content;
                 
                 // Process math if present
                 if (window.MathJax && (content.includes('\\') || content.includes('$'))) {
@@ -642,9 +627,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Add a helper function for formatting mathematical responses
     function formatMathResponse(steps) {
-        return `${steps.problem}\n\n${steps.steps.map((step, index) => 
-            `Step ${index + 1}: ${step}`
-        ).join('\n')}\n\nAnswer: ${steps.answer}`;
+        return `
+# Problem Analysis
+${steps.problem}
+
+# Step-by-Step Solution
+${steps.steps.map((step, index) => `## Step ${index + 1}: ${step}`).join('\n\n')}
+
+# Final Answer
+${steps.answer}
+`;
     }
 
     // Example usage in your message handling
