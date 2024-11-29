@@ -150,13 +150,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Content formatting functions
     function formatMathContent(content) {
+        // Handle LaTeX delimiters
         content = content
             .replace(/\\\((.*?)\\\)/g, '$ $1 $')
             .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$');
+
+        // Format bullet points
         content = content.replace(/^\* /gm, '• ');
+
+        // Format double ## at start of line to make entire line bold
+        content = content.replace(/^##\s*(.*?)$/gm, '<strong>$1</strong>');
+
+        // Handle general formatting
         content = content
             .replace(/\n\n/g, '<br><br>')
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
         return content;
     }
 
