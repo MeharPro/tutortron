@@ -1,7 +1,43 @@
 console.log('tutor.js loaded');
+        // Add MathJax configuration
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: true,
+                packages: ['base', 'ams', 'noerrors', 'noundefined']
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+            },
+            startup: {
+                ready: () => {
+                    MathJax.startup.defaultReady();
+                    MathJax.startup.promise.then(() => {
+                        console.log('MathJax initial typesetting complete');
+                    });
+                }
+            }
+        };
 document.addEventListener("DOMContentLoaded", async () => {
     await window.envLoaded;
-    
+    function formatMathContent(content) {
+        // Convert LaTeX delimiters
+        content = content
+            .replace(/\\\((.*?)\\\)/g, '$ $1 $')
+            .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$');
+
+        // Format bullet points
+        content = content.replace(/^\* /gm, '• ');
+
+        // Ensure proper spacing
+        content = content
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+        return content;
+    }
+
     const pathParts = window.location.pathname.split('/');
     const mode = pathParts[pathParts.length - 2];  // Get mode from URL
     const linkId = pathParts[pathParts.length - 1];
@@ -116,43 +152,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             loadingDiv.style.display = 'none';
         }
 
-        // Add MathJax configuration
-        window.MathJax = {
-            tex: {
-                inlineMath: [['$', '$']],
-                displayMath: [['$$', '$$']],
-                processEscapes: true,
-                packages: ['base', 'ams', 'noerrors', 'noundefined']
-            },
-            options: {
-                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
-            },
-            startup: {
-                ready: () => {
-                    MathJax.startup.defaultReady();
-                    MathJax.startup.promise.then(() => {
-                        console.log('MathJax initial typesetting complete');
-                    });
-                }
-            }
-        };
 
-        function formatMathContent(content) {
-            // Convert LaTeX delimiters
-            content = content
-                .replace(/\\\((.*?)\\\)/g, '$ $1 $')
-                .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$');
-
-            // Format bullet points
-            content = content.replace(/^\* /gm, '• ');
-
-            // Ensure proper spacing
-            content = content
-                .replace(/\n\n/g, '<br><br>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-            return content;
-        }
 
         function appendMessage(type, content) {
             const messageDiv = document.createElement('div');
