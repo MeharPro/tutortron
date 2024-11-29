@@ -10,13 +10,26 @@ const corsHeaders = {
 
 // Function to serve static files
 async function serveStaticFile(url, env) {
-  // Remove leading slash and handle empty path
-  const path = url.pathname.replace(/^\//, '') || 'index.html';
+  // Clean and normalize the path
+  let path = url.pathname.replace(/^\//, '');
+  
+  // Handle pros-only-teachers case
+  if (path.includes('pros-only-teachers')) {
+    // If requesting CSS file from pros-only-teachers page
+    if (path.endsWith('.css')) {
+      path = path.split('/').pop(); // Just get the CSS filename
+      console.log('Serving CSS file:', path);
+    }
+  }
+  
+  // Use index.html as default
+  if (!path) path = 'index.html';
   
   try {
     // Attempt to get the file from KV storage
     const file = await env.FILES.get(path);
     if (file === null) {
+      console.error(`File not found: ${path}`);
       return new Response('Not Found', { status: 404 });
     }
     
@@ -27,9 +40,10 @@ async function serveStaticFile(url, env) {
       'Cache-Control': path.endsWith('.css') ? 'no-cache' : 'public, max-age=3600'
     };
 
+    console.log('Successfully serving file:', path, 'with content type:', contentType);
     return new Response(file, { headers });
   } catch (error) {
-    console.error('Error serving file:', error);
+    console.error(`Error serving file ${path}:`, error);
     return new Response('Internal Server Error', { status: 500 });
   }
 }
