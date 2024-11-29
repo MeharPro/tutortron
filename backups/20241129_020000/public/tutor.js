@@ -1,41 +1,20 @@
 console.log('tutor.js loaded');
 document.addEventListener("DOMContentLoaded", async () => {
-    // Wait for Prism to be fully loaded
-    if (typeof Prism === 'undefined') {
-        await new Promise(resolve => {
-            const checkPrism = setInterval(() => {
-                if (typeof Prism !== 'undefined') {
-                    clearInterval(checkPrism);
-                    resolve();
-                }
-            }, 100);
-        });
-    }
-    
-    // Initialize Prism languages
-    if (!Prism.languages.cpp) {
-        await new Promise(resolve => {
-            const script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-cpp.min.js';
-            script.onload = resolve;
-            document.head.appendChild(script);
-        });
-    }
-    // Use the specified models
-    const models = [
-        "google/learnlm-1.5-pro-experimental:free",
-        "meta-llama/llama-3.1-70b-instruct:free",
-        "liquid/lfm-40b:free",
-        "google/gemma-2-9b-it:free",
-        "meta-llama/llama-3.1-405b-instruct:free",
-        "liquid/lfm-40b:free",
-        "qwen/qwen-2-7b-instruct:free"
-    ];
     await window.envLoaded;
     
     const pathParts = window.location.pathname.split('/');
     const mode = pathParts[pathParts.length - 2];  // Get mode from URL
     const linkId = pathParts[pathParts.length - 1];
+    const models = [
+        "google/learnlm-1.5-pro-experimental:free",
+        "openchat/openchat-7b:free",
+        "liquid/lfm-40b:free",
+        "google/gemini-exp-1121:free",
+        "google/gemma-2-9b-it:free",
+        "liquid/lfm-40b:free",
+        "meta-llama/llama-3.1-405b-instruct:free",
+        "qwen/qwen-2-7b-instruct:free"
+    ];
 
     const chatContainer = document.getElementById('chatContainer');
     const messageInput = document.getElementById('messageInput');
@@ -139,46 +118,45 @@ document.addEventListener("DOMContentLoaded", async () => {
             messageDiv.className = `message ${type}-message`;
             
             if (type === 'ai') {
-                // Clear any existing typing animation
-                if (currentTypingInterval) {
-                    clearInterval(currentTypingInterval);
-                }
+                // First, handle code blocks separately
+                content = content.replace(/```(\w+)?\s*([\s\S]*?)```/g, (match, lang, code) => {
+                    // Clean up the code block
+                    const cleanCode = code.trim()
+                        .replace(/^\n+|\n+$/g, '')  // Remove leading/trailing newlines
+                        .replace(/\t/g, '    ');     // Convert tabs to spaces
+                    
+                    // Map language names
+                    let language = (lang || 'text').toLowerCase();
+                    if (language === 'c++') language = 'cpp';
+                    
+                    return `<pre><code class="language-${language}">${cleanCode}</code></pre>`;
+                });
+
+                // Then handle other markdown elements
+                content = content
+                    // Handle bold text
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    // Handle inline code
+                    .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    // Handle bullet points
+                    .replace(/^\* (.+)$/gm, '<li>$1</li>')
+                    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+                    // Handle numbered lists
+                    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+                    .replace(/(<li>.*<\/li>)/gs, '<ol>$1</ol>')
+                    // Handle paragraphs (but not inside code blocks)
+                    .split('\n\n')
+                    .map(p => !p.includes('<pre>') ? `<p>${p}</p>` : p)
+                    .join('');
                 
-                // Create a temporary div to store the full formatted content
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = content;
-                
-                // Add the empty message div to the chat container first
-                chatContainer.appendChild(messageDiv);
-                
-                // Split content into characters
-                const textContent = tempDiv.textContent;
-                let currentIndex = 0;
-                let displayedContent = '';
-                
-                currentTypingInterval = setInterval(() => {
-                    if (currentIndex < textContent.length) {
-                        displayedContent += textContent[currentIndex];
-                        messageDiv.textContent = displayedContent;
-                        currentIndex++;
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    } else {
-                        // Once typing is complete, add the fully formatted content
-                        messageDiv.innerHTML = content;
-                        clearInterval(currentTypingInterval);
-                        currentTypingInterval = null;
-                        
-                        // Apply code highlighting if needed
-                        highlightCode(messageDiv);
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    }
-                }, 20); // Adjust typing speed here (lower = faster)
+                messageDiv.innerHTML = content;
+                highlightCode(messageDiv);
             } else {
-                // User messages appear instantly
                 messageDiv.textContent = content;
-                chatContainer.appendChild(messageDiv);
-                chatContainer.scrollTop = chatContainer.scrollHeight;
             }
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
         // Handle sending messages
@@ -190,64 +168,36 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         });
 
-
-
+        // Function to try different models
         async function tryModels(messages, currentModelIndex = 0) {
             if (currentModelIndex >= models.length) {
-                appendMessage('error', 'Unable to connect to AI service. Please try again later.');
                 throw new Error('All models failed');
             }
 
-            const currentModel = models[currentModelIndex];
-            console.log(`Trying model: ${currentModel}`);
-            
             try {
                 const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                     method: "POST",
                     headers: {
-                        "Authorization": `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                        Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
                         "Content-Type": "application/json",
-                        "HTTP-Referer": window.location.origin,
-                        "X-Title": "Tutor-Tron",
-                        "OpenAI-Organization": "org-kXfdsKO3HH7vQAf0kPHB7Vlh" // Add organization header
                     },
                     body: JSON.stringify({
-                        model: currentModel,
+                        model: models[currentModelIndex],
                         messages: messages,
-                        temperature: 0.7,
-                        max_tokens: 1500,
-                        top_p: 1,
-                        stream: false,
-                        presence_penalty: 0,
-                        frequency_penalty: 0
                     }),
                 });
 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    console.warn(`Model ${currentModel} failed:`, errorText);
-                    
-                    // Handle specific error codes
-                    if (response.status === 402) {
-                        console.log('Payment required, switching to next model...');
-                    } else if (response.status === 429) {
-                        console.log('Rate limited, waiting before retry...');
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                    }
-                    
+                    // If this model fails, try the next one
+                    console.log(`Model ${models[currentModelIndex]} failed, trying next model...`);
                     return tryModels(messages, currentModelIndex + 1);
                 }
 
                 const data = await response.json();
-                if (!data.choices?.[0]?.message?.content) {
-                    console.warn(`Invalid response from ${currentModel}`);
-                    return tryModels(messages, currentModelIndex + 1);
-                }
-
                 return data.choices[0].message.content;
-
             } catch (error) {
-                console.error(`Error with model ${currentModel}:`, error);
+                // If this model errors, try the next one
+                console.log(`Error with model ${models[currentModelIndex]}, trying next model...`);
                 return tryModels(messages, currentModelIndex + 1);
             }
         }

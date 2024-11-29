@@ -55,23 +55,23 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // System prompts for each mode
     const systemPrompt = {
-        comparitor: 
-        "You are crafting a comparative analysis prompt for an AI model. Create a structured teaching prompt that:\n" +
-        "1. Establishes clear evaluation criteria\n" +
-        "2. Uses parallel structure when comparing elements\n" +
-        "3. Highlights both obvious and subtle distinctions\n" +
-        "4. Examines contextual factors affecting comparisons\n" +
-        "5. Identifies practical implications of differences\n\n" +
+        investigator: 
+        "You are crafting a teaching prompt for an AI model. Transform the given topic into a structured learning experience that:\n" +
+        "1. Breaks down complex concepts into fundamental building blocks\n" +
+        "2. Incorporates specific real-world examples and applications\n" +
+        "3. Builds knowledge progressively from basic to advanced concepts\n" +
+        "4. Includes targeted comprehension checks at key points\n" +
+        "5. Uses the Socratic method to guide understanding\n\n" +
         "Format your prompt to explicitly instruct the AI to:\n" +
-        "- Begin with clear definitions of all elements being compared\n" +
-        "- Use consistent criteria across comparisons\n" +
-        "- Include specific examples illustrating key differences\n" +
-        "- Incorporate targeted follow-up questions that:\n" +
-        "  * Challenge oversimplified comparisons\n" +
-        "  * Explore edge cases\n" +
-        "  * Reveal hidden similarities\n" +
-        "  * Examine practical implications\n\n" +
-        "IMPORTANT: Return only the comparative prompt, without any meta-commentary or additional responses.",
+        "- Begin with foundational definitions\n" +
+        "- Connect concepts to practical applications\n" +
+        "- Include periodic knowledge validation\n" +
+        "- Ask probing follow-up questions that:\n" +
+        "  * Clarify student misconceptions\n" +
+        "  * Deepen conceptual understanding\n" +
+        "  * Bridge gaps in knowledge\n" +
+        "  * Challenge assumptions\n\n" +
+        "IMPORTANT: Return only the teaching prompt, without any meta-commentary or additional responses.",
 
         comparitor: 
         "You are crafting a comparative analysis prompt for an AI model. Create a structured teaching prompt that:\n" +
@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             "Format your response as a direct lesson instruction, similar to:\n" +
             "'Introduce [concept] in [language], checking understanding with questions. Then present broken code examples for students to debug and fix. Verify their solutions.'\n\n" +
             "IMPORTANT: Return only the lesson prompt itself, without any additional commentary or explanation.",
-            eliminator: 
+        eliminator: 
             "You are crafting a knowledge-testing game prompt. Create a clear, elimination-style prompt that instructs the AI to:\n" +
             "1. Start by providing a comprehensive list of items related to the topic, where each item includes:\n" +
             "   - Name/identifier\n" +
@@ -312,6 +312,112 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Initial load of links
     await window.loadLinks();
+
+    // Add info icons with tooltips to mode tabs
+    const modeInfo = {
+        investigator: "Allows the student to investigate a topic in depth.",
+        quest: "Allows the student to go above and beyond the topic and create connections.",
+        comparitor: "Allows the student to understand key similarities and differences between complex topics.",
+        codebreaker: "Applies to learning related to coding, gives the student broken code to debug.",
+        eliminator: "A game to understand key facts about multiple topics."
+    };
+
+    // Add info icons to each mode tab
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+        const mode = tab.dataset.mode;
+        const infoIcon = document.createElement('span');
+        infoIcon.innerHTML = 'i';
+        infoIcon.className = 'info-icon';
+        infoIcon.style.cssText = `
+            cursor: pointer;
+            position: relative;
+            margin-left: 8px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: #333;
+            color: white;
+            font-family: 'Courier New', monospace;
+            font-weight: normal;
+            line-height: 1;
+            transition: all 0.2s ease;
+        `;
+
+        // Add hover effect
+        infoIcon.addEventListener('mouseenter', () => {
+            infoIcon.style.backgroundColor = '#666';
+            tooltip.style.visibility = 'visible';
+            tooltip.style.opacity = '1';
+        });
+
+        infoIcon.addEventListener('mouseleave', () => {
+            infoIcon.style.backgroundColor = '#333';
+            tooltip.style.visibility = 'hidden';
+            tooltip.style.opacity = '0';
+        });
+
+        // Create tooltip
+        const tooltip = document.createElement('div');
+        tooltip.className = 'tooltip';
+        tooltip.textContent = modeInfo[mode];
+        tooltip.style.cssText = `
+            visibility: hidden;
+            position: absolute;
+            z-index: 1;
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 8px 12px;
+            border-radius: 6px;
+            width: 200px;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 125%;
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            white-space: normal;
+        `;
+
+        // Add arrow to tooltip
+        const arrow = document.createElement('div');
+        arrow.style.cssText = `
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        `;
+        tooltip.appendChild(arrow);
+        infoIcon.appendChild(tooltip);
+
+        // Add touch events for mobile
+        infoIcon.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            tooltip.style.visibility = 'visible';
+            tooltip.style.opacity = '1';
+            infoIcon.style.backgroundColor = '#666';
+        });
+
+        infoIcon.addEventListener('touchend', () => {
+            setTimeout(() => {
+                tooltip.style.visibility = 'hidden';
+                tooltip.style.opacity = '0';
+                infoIcon.style.backgroundColor = '#333';
+            }, 2000);
+        });
+
+        tab.appendChild(infoIcon);
+    });
 });
 
 // Function to show messages
@@ -350,7 +456,37 @@ async function deleteLink(linkId) {
     }
 }
 
-// Move loadLinks to global scope and attach to window
+// Add this at the top with other functions
+async function copyToClipboard(text) {
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } else {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                textArea.remove();
+                return true;
+            } catch (error) {
+                textArea.remove();
+                return false;
+            }
+        }
+    } catch (error) {
+        return false;
+    }
+}
+
+// Update the loadLinks function's copy button section
 window.loadLinks = async function() {
     const token = localStorage.getItem('teacherToken');
     try {
@@ -380,11 +516,20 @@ window.loadLinks = async function() {
                 <span class="mode-indicator ${link.mode || 'investigator'}">
                     ${(link.mode || 'investigator').charAt(0).toUpperCase() + (link.mode || 'investigator').slice(1)}
                 </span>
-                <div class="link-url">${fullUrl}</div>
+                <div class="link-container" style="display: flex; align-items: center; gap: 10px;">
+                    <span class="link-url" style="font-family: monospace; overflow: hidden; text-overflow: ellipsis;">${fullUrl}</span>
+                    <button class="copy-link-btn" style="
+                        padding: 5px 10px;
+                        background: #4F46E5;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        white-space: nowrap;
+                    "> Copy</button>
+                </div>
                 <div class="prompt-preview">${link.prompt}</div>
-                <button class="copy-link-btn" onclick="navigator.clipboard.writeText('${fullUrl}')">
-                    Copy Link
-                </button>
                 <button class="delete-link-btn" data-id="${link.id}">Delete</button>
             `;
             
@@ -394,6 +539,24 @@ window.loadLinks = async function() {
             } else {
                 linksList.appendChild(linkCard);
             }
+
+            // Add copy event listener
+            const copyBtn = linkCard.querySelector('.copy-link-btn');
+            const urlSpan = linkCard.querySelector('.link-url');
+            
+            copyBtn.addEventListener('click', async () => {
+                const success = await copyToClipboard(urlSpan.textContent);
+                if (success) {
+                    const originalText = copyBtn.innerHTML;
+                    const originalBg = copyBtn.style.background;
+                    copyBtn.innerHTML = '✅ Copied!';
+                    copyBtn.style.background = '#059669';
+                    setTimeout(() => {
+                        copyBtn.innerHTML = originalText;
+                        copyBtn.style.background = originalBg;
+                    }, 2000);
+                }
+            });
         });
         
         // Add delete handlers
@@ -405,3 +568,120 @@ window.loadLinks = async function() {
         showMessage('Failed to load links', true);
     }
 }; 
+
+// Add the copyToClipboard helper function
+async function copyToClipboard(text) {
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } else {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                textArea.remove();
+                return true;
+            } catch (error) {
+                textArea.remove();
+                return false;
+            }
+        }
+    } catch (error) {
+        return false;
+    }
+}
+
+// Update the createLinkElement function
+function createLinkElement(link, mode) {
+    const container = document.createElement('div');
+    container.className = 'link-container';
+    container.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 5px 0;
+    `;
+
+    const linkText = document.createElement('span');
+    linkText.textContent = `${window.location.origin}/${mode}/${link}`;
+    linkText.style.cssText = `
+        font-family: monospace;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    `;
+
+    const copyButton = document.createElement('button');
+    copyButton.innerHTML = ' Copy';
+    copyButton.className = 'copy-button';
+    copyButton.style.cssText = `
+        padding: 5px 10px;
+        background: #4F46E5;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        min-width: 70px;
+    `;
+
+    copyButton.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const success = await copyToClipboard(linkText.textContent);
+        if (success) {
+            const originalText = copyButton.innerHTML;
+            copyButton.innerHTML = '✅ Copied!';
+            copyButton.style.background = '#059669';
+            setTimeout(() => {
+                copyButton.innerHTML = originalText;
+                copyButton.style.background = '#4F46E5';
+            }, 2000);
+        }
+    });
+
+    container.appendChild(linkText);
+    container.appendChild(copyButton);
+    return container;
+}
+
+// Update the displayLinks function to use the new link elements
+function displayLinks(links) {
+    const linksContainer = document.getElementById('linksContainer');
+    linksContainer.innerHTML = '';
+    
+    if (links.length === 0) {
+        linksContainer.innerHTML = '<p>No links generated yet.</p>';
+        return;
+    }
+
+    links.forEach(link => {
+        const linkElement = createLinkElement(link.id, link.mode);
+        linksContainer.appendChild(linkElement);
+    });
+}
+
+// Add this to your CSS (you can add it inline or in your stylesheet)
+const style = document.createElement('style');
+style.textContent = `
+    .info-icon:hover .tooltip {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    @media (max-width: 768px) {
+        .tooltip {
+            width: 150px;
+            font-size: 12px;
+            padding: 6px 10px;
+        }
+    }
+`;
+document.head.appendChild(style);
