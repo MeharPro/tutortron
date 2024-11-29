@@ -18,7 +18,8 @@ const essentialFiles = [
     'teacher-dashboard.js',
     'register.js',
     'index.js',
-    'tutor.css'
+    'tutor.css',
+    'server.js'
 ];
 
 // Load previous file hashes
