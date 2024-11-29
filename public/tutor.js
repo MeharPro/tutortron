@@ -495,14 +495,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     imageInput.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file) {
-            if (file.size > 1024 * 1024 * 2) { // 2MB limit
-                alert('Image is too large. Please use an image under 2MB.');
+            if (file.size > 1024 * 1024) { // 1MB limit instead of 2MB
+                alert('Image is too large. Please use an image under 1MB.');
                 return;
             }
             const reader = new FileReader();
             reader.onload = function(e) {
                 const base64Full = e.target.result;
-                currentImage = base64Full.split(',')[1]; // Get base64 part
+                currentImage = base64Full.split(',')[1];
                 console.log("Image format:", file.type);
                 console.log("Image size:", file.size);
                 console.log("Base64 length:", currentImage.length);
@@ -535,23 +535,38 @@ document.addEventListener("DOMContentLoaded", async () => {
         for (const model of VISION_MODELS) {
             try {
                 console.log(`Attempting vision model: ${model}, attempt ${retryCount + 1}`);
+                
+                // Simplify the request to match the Python implementation
+                const requestBody = {
+                    model: model,
+                    messages: [
+                        {
+                            role: "user",
+                            content: [
+                                {
+                                    type: "text",
+                                    text: visionMessages[1].content[1].text
+                                },
+                                {
+                                    type: "image_url",
+                                    image_url: {
+                                        url: `data:image/jpeg;base64,${currentImage}`
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                };
+
+                console.log("Request body:", JSON.stringify(requestBody, null, 2));
+
                 const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                     method: "POST",
                     headers: {
                         Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": window.location.origin,
-                        "X-Title": "Tutor-Tron"
+                        "Content-Type": "application/json"
                     },
-                    body: JSON.stringify({
-                        model: model,
-                        messages: visionMessages,
-                        max_tokens: 1024,
-                        temperature: 0.7,
-                        top_p: 0.9,
-                        stream: false,
-                        seed: Math.floor(Math.random() * 1000000)
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 const responseText = await response.text();
@@ -560,8 +575,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (!response.ok) {
                     const errorData = JSON.parse(responseText);
                     if (errorData.error?.code === 429 && retryCount < 3) {
-                        // Rate limit hit, wait and retry
-                        const waitTime = Math.pow(2, retryCount) * 1000; // Exponential backoff
+                        const waitTime = Math.pow(2, retryCount) * 1000;
                         console.log(`Rate limit hit, waiting ${waitTime}ms before retry...`);
                         await delay(waitTime);
                         return tryVisionModel(visionMessages, retryCount + 1);
@@ -571,21 +585,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 const data = JSON.parse(responseText);
                 
-                // Check for model-specific errors
                 if (data.choices?.[0]?.error) {
                     console.error(`Error from ${model}:`, data.choices[0].error);
-                    continue; // Try next model
+                    continue;
                 }
 
                 if (!data.choices?.[0]?.message?.content?.trim()) {
                     console.error(`Empty response from ${model}`);
-                    continue; // Try next model
+                    continue;
                 }
 
                 return data.choices[0].message.content.trim();
             } catch (error) {
                 console.error(`Error with ${model}:`, error);
-                // Continue to next model
             }
         }
         throw new Error('All vision models failed');
