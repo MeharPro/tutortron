@@ -347,6 +347,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             transition: all 0.2s ease;
         `;
 
+        // Add hover effect
+        infoIcon.addEventListener('mouseenter', () => {
+            infoIcon.style.backgroundColor = '#666';
+            tooltip.style.visibility = 'visible';
+            tooltip.style.opacity = '1';
+        });
+
+        infoIcon.addEventListener('mouseleave', () => {
+            infoIcon.style.backgroundColor = '#333';
+            tooltip.style.visibility = 'hidden';
+            tooltip.style.opacity = '0';
+        });
+
         // Create tooltip
         const tooltip = document.createElement('div');
         tooltip.className = 'tooltip';
@@ -372,33 +385,38 @@ document.addEventListener("DOMContentLoaded", async () => {
             white-space: normal;
         `;
 
-        // Add hover events
-        infoIcon.addEventListener('mouseenter', () => {
-            tooltip.style.visibility = 'visible';
-            tooltip.style.opacity = '1';
-        });
-
-        infoIcon.addEventListener('mouseleave', () => {
-            tooltip.style.visibility = 'hidden';
-            tooltip.style.opacity = '0';
-        });
+        // Add arrow to tooltip
+        const arrow = document.createElement('div');
+        arrow.style.cssText = `
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        `;
+        tooltip.appendChild(arrow);
+        infoIcon.appendChild(tooltip);
 
         // Add touch events for mobile
         infoIcon.addEventListener('touchstart', (e) => {
             e.preventDefault();
             tooltip.style.visibility = 'visible';
             tooltip.style.opacity = '1';
+            infoIcon.style.backgroundColor = '#666';
         });
 
         infoIcon.addEventListener('touchend', () => {
             setTimeout(() => {
                 tooltip.style.visibility = 'hidden';
                 tooltip.style.opacity = '0';
-            }, 2000); // Hide after 2 seconds on mobile
+                infoIcon.style.backgroundColor = '#333';
+            }, 2000);
         });
 
         tab.appendChild(infoIcon);
-        tab.appendChild(tooltip);
     });
 });
 
