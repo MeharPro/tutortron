@@ -1,0 +1,14 @@
+/* Code block styling for codebreaker mode */
+html.codebreaker pre[class*="language-"] {
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb;
+    margin: 10px 0;
+    padding: 1rem;
+    border-radius: 4px;
+}
+
+html.codebreaker code[class*="language-"] {
+    font-family: 'Fira Code', 'Consolas', monospace !important;
+}
+
+/* Remove all the token color overrides since they're handled in tutor.html now */ 

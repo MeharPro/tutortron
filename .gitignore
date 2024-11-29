@@ -1,0 +1,6 @@
+node_modules/
+.env
+.wrangler/
+dist/
+.file-hashes.json
+public/.env 

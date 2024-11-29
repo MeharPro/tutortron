@@ -1,0 +1,407 @@
+async function checkAuth() {
+    const token = localStorage.getItem('teacherToken');
+    if (!token) {
+        window.location.href = '/index.html';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/auth/verify', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            localStorage.removeItem('teacherToken');
+            window.location.href = '/index.html';
+        }
+    } catch (error) {
+        console.error('Auth check failed:', error);
+        localStorage.removeItem('teacherToken');
+        window.location.href = '/index.html';
+    }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+    await checkAuth();
+    const token = localStorage.getItem('teacherToken');
+
+    // Mode tabs functionality
+    const modeTabs = document.querySelectorAll('.mode-tab');
+    const modePanels = document.querySelectorAll('.mode-panel');
+
+    modeTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            modeTabs.forEach(t => t.classList.remove('active'));
+            modePanels.forEach(p => p.classList.remove('active'));
+            
+            tab.classList.add('active');
+            const mode = tab.dataset.mode;
+            document.getElementById(`${mode}-panel`).classList.add('active');
+        });
+    });
+
+    // Add models list at the top
+    const models = [
+        "google/learnlm-1.5-pro-experimental:free",
+        "meta-llama/llama-3.1-405b-instruct:free",
+        "liquid/lfm-40b:free",
+        "google/gemini-exp-1114",
+        "meta-llama/llama-3.1-70b-instruct:free",
+        "google/gemma-2-9b-it:free",
+        "qwen/qwen-2-7b-instruct:free"
+    ];
+
+    // System prompts for each mode
+    const systemPrompt = {
+        comparitor: 
+        "You are crafting a comparative analysis prompt for an AI model. Create a structured teaching prompt that:\n" +
+        "1. Establishes clear evaluation criteria\n" +
+        "2. Uses parallel structure when comparing elements\n" +
+        "3. Highlights both obvious and subtle distinctions\n" +
+        "4. Examines contextual factors affecting comparisons\n" +
+        "5. Identifies practical implications of differences\n\n" +
+        "Format your prompt to explicitly instruct the AI to:\n" +
+        "- Begin with clear definitions of all elements being compared\n" +
+        "- Use consistent criteria across comparisons\n" +
+        "- Include specific examples illustrating key differences\n" +
+        "- Incorporate targeted follow-up questions that:\n" +
+        "  * Challenge oversimplified comparisons\n" +
+        "  * Explore edge cases\n" +
+        "  * Reveal hidden similarities\n" +
+        "  * Examine practical implications\n\n" +
+        "IMPORTANT: Return only the comparative prompt, without any meta-commentary or additional responses.",
+
+        comparitor: 
+        "You are crafting a comparative analysis prompt for an AI model. Create a structured teaching prompt that:\n" +
+        "1. Establishes clear evaluation criteria\n" +
+        "2. Uses parallel structure when comparing elements\n" +
+        "3. Highlights both obvious and subtle distinctions\n" +
+        "4. Examines contextual factors affecting comparisons\n" +
+        "5. Identifies practical implications of differences\n\n" +
+        "Format your prompt to explicitly instruct the AI to:\n" +
+        "- Begin with clear definitions of all elements being compared\n" +
+        "- Use consistent criteria across comparisons\n" +
+        "- Include specific examples illustrating key differences\n" +
+        "- Incorporate targeted follow-up questions that:\n" +
+        "  * Challenge oversimplified comparisons\n" +
+        "  * Explore edge cases\n" +
+        "  * Reveal hidden similarities\n" +
+        "  * Examine practical implications\n\n" +
+        "IMPORTANT: Return only the comparative prompt, without any meta-commentary or additional responses.",
+
+        quest: "You are crafting an exploratory learning prompt for an AI model. Create an inquiry-based prompt that:\n" +
+        "1. Sparks genuine curiosity about the topic\n" +
+        "2. Reveals unexpected connections\n" +
+        "3. Encourages creative thinking\n" +
+        "4. Leads to deeper investigations\n" +
+        "5. Maintains focus while allowing exploration\n\n" +
+        "Format your prompt to explicitly instruct the AI to:\n" +
+        "- Start with an intriguing aspect of the topic\n" +
+        "- Guide discovery through strategic questioning\n" +
+        "- Connect concepts to student interests\n" +
+        "- Include follow-up questions that:\n" +
+        "  * Encourage hypothesis formation\n" +
+        "  * Promote critical thinking\n" +
+        "  * Lead to unexpected insights\n" +
+        "  * Support natural knowledge expansion\n\n" +
+        "IMPORTANT: Limit to five sentences and return only the exploratory prompt.",
+        codebreaker: (language) => 
+            "You are crafting a code debugging lesson prompt. Create a learning prompt for " + language + " that instructs the AI to:\n" +
+            "1. Structure the lesson in three parts:\n" +
+            "   - Brief concept introduction with core syntax and usage\n" +
+            "   - Interactive comprehension checks using simple questions\n" +
+            "   - Debugging game with intentionally broken code\n\n" +
+            "2. For the debugging game section:\n" +
+            "   - Present code snippets that appear correct but have subtle issues\n" +
+            "   - Ask students to identify what's wrong with the code\n" +
+            "   - Have students submit fixed versions\n" +
+            "   - Verify student solutions for correctness\n\n" +
+            "3. Include instructions for:\n" +
+            "   - Progressive difficulty in the broken code examples\n" +
+            "   - Providing appropriate hints when needed\n" +
+            "   - Explaining why each fix works\n\n" +
+            "   - Keeping the lesson concise and engaging\n\n" +
+            "Format your response as a direct lesson instruction, similar to:\n" +
+            "'Introduce [concept] in [language], checking understanding with questions. Then present broken code examples for students to debug and fix. Verify their solutions.'\n\n" +
+            "IMPORTANT: Return only the lesson prompt itself, without any additional commentary or explanation.",
+            eliminator: 
+            "You are crafting a knowledge-testing game prompt. Create a clear, elimination-style prompt that instructs the AI to:\n" +
+            "1. Start by providing a comprehensive list of items related to the topic, where each item includes:\n" +
+            "   - Name/identifier\n" +
+            "   - 2-3 key facts about each item\n" +
+            "   - Important contextual information\n\n" +
+            "2. Structure the elimination game to:\n" +
+            "   - Present a fact/characteristic that applies to all but one item\n" +
+            "   - Ask the student to identify the item that doesn't match\n" +
+            "   - Remove the identified item and continue with remaining items\n" +
+            "   - Progress until only one item remains\n\n" +
+            "3. Include instructions for:\n" +
+            "   - Validating each student answer\n" +
+            "   - Providing hints if needed\n" +
+            "   - Explaining why each elimination was correct\n\n" +
+            "Format your response as a direct game instruction, similar to:\n" +
+            "'List [items in category] with [specific details]. Then play an elimination game where you present facts that exclude one item at a time. After each correct identification, continue with the remaining items until one remains.'\n\n" +
+            "IMPORTANT: Return only the game prompt itself, without any additional commentary or explanation."
+    };
+
+    // Function to try different models for prompt refinement
+    async function tryModels(systemPrompt, userPrompt, currentModelIndex = 0) {
+        if (currentModelIndex >= models.length) {
+            throw new Error('All models failed');
+        }
+
+        try {
+            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    model: models[currentModelIndex],
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userPrompt }
+                    ],
+                }),
+            });
+
+            if (!response.ok) {
+                // If this model fails, try the next one
+                console.log(`Model ${models[currentModelIndex]} failed, trying next model...`);
+                return tryModels(systemPrompt, userPrompt, currentModelIndex + 1);
+            }
+
+            const data = await response.json();
+            return data.choices[0].message.content;
+        } catch (error) {
+            // If this model errors, try the next one
+            console.log(`Error with model ${models[currentModelIndex]}, trying next model...`);
+            return tryModels(systemPrompt, userPrompt, currentModelIndex + 1);
+        }
+    }
+
+    // Update the refinePrompt function
+    async function refinePrompt(mode, prompt) {
+        try {
+            let promptTemplate;
+            if (mode === 'codebreaker') {
+                const language = document.getElementById('codebreakerLanguage').value;
+                promptTemplate = systemPrompt.codebreaker(language);
+            } else {
+                promptTemplate = systemPrompt[mode];
+            }
+
+            return await tryModels(promptTemplate, prompt);
+        } catch (error) {
+            console.error('All models failed:', error);
+            return prompt; // Return original prompt if all models fail
+        }
+    }
+
+    // Update the prompt refinement handler
+    ['investigator', 'comparitor', 'quest', 'codebreaker', 'eliminator'].forEach(mode => {
+        const promptInput = document.getElementById(`${mode}Prompt`);
+        const refinedPromptDiv = document.getElementById(`${mode}RefinedPrompt`);
+        
+        promptInput.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                const originalPrompt = promptInput.value;
+                refinedPromptDiv.textContent = 'Refining prompt...';
+                refinedPromptDiv.style.display = 'block';
+                
+                const refinedPrompt = await refinePrompt(mode, originalPrompt);
+                
+                // Update both the display div and the input field
+                refinedPromptDiv.textContent = refinedPrompt;
+                promptInput.value = refinedPrompt;
+                
+                // Optional: Focus back on the input and move cursor to end
+                promptInput.focus();
+                promptInput.setSelectionRange(refinedPrompt.length, refinedPrompt.length);
+            }
+        });
+    });
+
+    // Create link functions for each mode
+    async function createModeLink(mode, subject, prompt) {
+        try {
+            const token = localStorage.getItem('teacherToken');
+            if (!token) {
+                throw new Error('No authentication token found');
+            }
+
+            console.log('Creating link with:', { mode, subject, prompt }); // Debug log
+
+            const response = await fetch('/api/links', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    subject,
+                    prompt,
+                    mode
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('Server error:', errorData); // Debug log
+                throw new Error(errorData.message || 'Failed to create link');
+            }
+
+            await window.loadLinks();
+            return true;
+        } catch (error) {
+            console.error(`Error creating ${mode} link:`, error);
+            showMessage(`Failed to create link: ${error.message}`, true);
+            return false;
+        }
+    }
+
+    // Add click handlers for each mode's create button
+    ['investigator', 'comparitor', 'quest', 'codebreaker', 'eliminator'].forEach(mode => {
+        document.getElementById(`create${mode.charAt(0).toUpperCase() + mode.slice(1)}Btn`)
+            .addEventListener('click', async () => {
+                const subject = document.getElementById(`${mode}Subject`).value.trim();
+                const promptInput = document.getElementById(`${mode}Prompt`);
+                const useCustomPrompt = document.getElementById(`${mode}Custom`).checked;
+                let prompt = promptInput.value.trim();
+
+                if (!subject || !prompt) {
+                    showMessage('Please fill in both subject and prompt fields', true);
+                    return;
+                }
+
+                // Show loading state
+                const button = document.getElementById(`create${mode.charAt(0).toUpperCase() + mode.slice(1)}Btn`);
+                const originalText = button.textContent;
+                button.textContent = useCustomPrompt ? 'Creating Link...' : 'Refining Prompt...';
+                button.disabled = true;
+
+                try {
+                    // Refine the prompt unless custom prompt is checked
+                    if (!useCustomPrompt) {
+                        prompt = await refinePrompt(mode, prompt);
+                    }
+
+                    const success = await createModeLink(mode, subject, prompt);
+                    if (success) {
+                        promptInput.value = '';
+                        document.getElementById(`${mode}Subject`).value = '';
+                        document.getElementById(`${mode}Custom`).checked = false;
+                        showMessage(`${mode.charAt(0).toUpperCase() + mode.slice(1)} link created successfully!`);
+                    } else {
+                        showMessage('Failed to create link', true);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showMessage('Failed to process prompt', true);
+                } finally {
+                    // Restore button state
+                    button.textContent = originalText;
+                    button.disabled = false;
+                }
+            });
+    });
+
+    // Initial load of links
+    await window.loadLinks();
+});
+
+// Function to show messages
+function showMessage(message, isError = false) {
+    const messageDiv = document.createElement('div');
+    messageDiv.textContent = message;
+    messageDiv.className = isError ? 'error-message' : 'success-message';
+    messageDiv.style.marginTop = '10px';
+    document.querySelector('.prompt-form').appendChild(messageDiv);
+    setTimeout(() => messageDiv.remove(), 3000);
+}
+
+// Update the delete link function
+async function deleteLink(linkId) {
+    try {
+        const token = localStorage.getItem('teacherToken');
+        const response = await fetch(`/api/links/${linkId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Server error:', errorData);
+            throw new Error('Failed to delete link');
+        }
+        
+        await window.loadLinks();
+        showMessage('Link deleted successfully!');
+    } catch (error) {
+        console.error('Error deleting link:', error);
+        showMessage('Failed to delete link: ' + error.message, true);
+    }
+}
+
+// Move loadLinks to global scope and attach to window
+window.loadLinks = async function() {
+    const token = localStorage.getItem('teacherToken');
+    try {
+        const response = await fetch('/api/links', {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) throw new Error('Failed to load links');
+        
+        const links = await response.json();
+        const linksList = document.getElementById('linksList');
+        linksList.innerHTML = '';
+        
+        // Sort links by creation date, newest first
+        links.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        links.forEach(link => {
+            const linkCard = document.createElement('div');
+            linkCard.className = `link-card ${link.mode || 'investigator'}`;
+            const fullUrl = `${window.location.origin}/${link.mode || 'investigator'}/${link.id}`;
+            
+            linkCard.innerHTML = `
+                <h3>${link.subject}</h3>
+                <span class="mode-indicator ${link.mode || 'investigator'}">
+                    ${(link.mode || 'investigator').charAt(0).toUpperCase() + (link.mode || 'investigator').slice(1)}
+                </span>
+                <div class="link-url">${fullUrl}</div>
+                <div class="prompt-preview">${link.prompt}</div>
+                <button class="copy-link-btn" onclick="navigator.clipboard.writeText('${fullUrl}')">
+                    Copy Link
+                </button>
+                <button class="delete-link-btn" data-id="${link.id}">Delete</button>
+            `;
+            
+            // Insert at the beginning of the list
+            if (linksList.firstChild) {
+                linksList.insertBefore(linkCard, linksList.firstChild);
+            } else {
+                linksList.appendChild(linkCard);
+            }
+        });
+        
+        // Add delete handlers
+        document.querySelectorAll('.delete-link-btn').forEach(btn => {
+            btn.addEventListener('click', () => deleteLink(btn.dataset.id));
+        });
+    } catch (error) {
+        console.error('Error loading links:', error);
+        showMessage('Failed to load links', true);
+    }
+}; 

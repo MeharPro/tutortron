@@ -1,0 +1,19 @@
+{
+  "name": "tutortron",
+  "version": "1.0.0",
+  "description": "Tutor-Tron Teacher Dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "echo 'No build step required'",
+    "upload": "node upload-files.js",
+    "full-deploy": "npx wrangler deploy && npm run upload"
+  },
+  "dependencies": {
+    "itty-router": "^3.0.12"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
