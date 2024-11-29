@@ -224,64 +224,77 @@ document.addEventListener("DOMContentLoaded", async () => {
                             role: "user",
                             content: [
                                 {
-                                    type: "text",
-                                    text: message
-                                },
-                                {
                                     type: "image_url",
                                     image_url: {
                                         url: `data:image/jpeg;base64,${currentImage}`
                                     }
+                                },
+                                {
+                                    type: "text",
+                                    text: message
                                 }
                             ]
                         }
                     ];
 
                     console.log("Sending request to vision model...");
-                    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                        method: "POST",
-                        headers: {
-                            Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                            "Content-Type": "application/json",
-                            "HTTP-Referer": window.location.origin,
-                            "X-Title": "Tutor-Tron"
-                        },
-                        body: JSON.stringify({
-                            model: "meta-llama/llama-3.2-90b-vision-instruct:free",
-                            messages: visionMessages,
-                            max_tokens: 1024
-                        })
-                    });
+                    try {
+                        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                            method: "POST",
+                            headers: {
+                                Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                                "Content-Type": "application/json",
+                                "HTTP-Referer": window.location.origin,
+                                "X-Title": "Tutor-Tron"
+                            },
+                            body: JSON.stringify({
+                                model: "meta-llama/llama-3.2-90b-vision-instruct:free",
+                                messages: visionMessages,
+                                max_tokens: 1024,
+                                temperature: 0.7,
+                                top_p: 0.9,
+                                stream: false
+                            })
+                        });
 
-                    if (!response.ok) {
-                        console.error("Vision model response not OK:", await response.text());
-                        throw new Error('Vision model failed');
+                        if (!response.ok) {
+                            console.error("Vision model response not OK:", await response.text());
+                            throw new Error('Vision model failed');
+                        }
+
+                        const data = await response.json();
+                        console.log("Vision model response:", data);
+                        
+                        if (!data.choices?.[0]?.message?.content?.trim()) {
+                            console.error("Empty or invalid response from vision model");
+                            throw new Error('Empty response from vision model');
+                        }
+
+                        const aiMessage = data.choices[0].message.content.trim();
+                        console.log("AI Message:", aiMessage);
+                        
+                        if (aiMessage) {
+                            // Add to history - store as text only for future context
+                            conversationHistory.push({
+                                role: "user",
+                                content: `[Image uploaded] ${message}`
+                            });
+                            conversationHistory.push({ 
+                                role: "assistant", 
+                                content: aiMessage 
+                            });
+                            
+                            // Ensure the message is displayed
+                            appendMessage('ai', aiMessage);
+                        } else {
+                            throw new Error('Empty response from vision model');
+                        }
+                        
+                    } catch (error) {
+                        console.error("Vision model error:", error);
+                        appendMessage('error', 'Failed to process image. Please try again.');
                     }
 
-                    const data = await response.json();
-                    console.log("Vision model response:", data);
-                    
-                    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-                        console.error("Unexpected response format:", data);
-                        throw new Error('Invalid response format from vision model');
-                    }
-
-                    const aiMessage = data.choices[0].message.content;
-                    console.log("AI Message:", aiMessage);
-                    
-                    // Add to history - store as text only for future context
-                    conversationHistory.push({
-                        role: "user",
-                        content: `[Image uploaded] ${message}`
-                    });
-                    conversationHistory.push({ 
-                        role: "assistant", 
-                        content: aiMessage 
-                    });
-                    
-                    // Ensure the message is displayed
-                    appendMessage('ai', aiMessage);
-                    
                     // Reset image state but keep the conversation history
                     currentImage = null;
                     imageButton.style.backgroundColor = '';
