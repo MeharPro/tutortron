@@ -6,7 +6,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const mode = pathParts[pathParts.length - 2];  // Get mode from URL
     const linkId = pathParts[pathParts.length - 1];
     const models = [
-        "meta-llama/llama-3.2-90b-vision-instruct:free",
         "google/learnlm-1.5-pro-experimental:free",
         "openchat/openchat-7b:free",
         "liquid/lfm-40b:free",
@@ -206,20 +205,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Modify the sendMessage function
         async function sendMessage() {
             const message = messageInput.value.trim();
-            if (!message) {
-                showError('Please enter a message');
-                return;
-            }
+            if (!message) return;
 
             appendMessage('user', message);
             messageInput.value = '';
             messageInput.style.height = 'auto';
-            let success = false;
-            let retries = 0;
 
             try {
                 if (currentImage) {
-                    // Image + Text input = Vision model
+                    // If image is present, use vision model
                     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                         method: "POST",
                         headers: {
@@ -229,7 +223,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         body: JSON.stringify({
                             model: "meta-llama/llama-3.2-90b-vision-instruct:free",
                             messages: [
-                                ...conversationHistory.slice(0, -1),
+                                ...conversationHistory,
                                 {
                                     role: "user",
                                     content: [
@@ -254,21 +248,35 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const data = await response.json();
                     const aiMessage = data.choices[0].message.content;
                     
+                    // Add to history - include both text and image reference
                     conversationHistory.push({
                         role: "user",
-                        content: message
+                        content: [
+                            { type: "text", text: message },
+                            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${currentImage}` } }
+                        ]
                     });
                     conversationHistory.push({ role: "assistant", content: aiMessage });
                     
                     appendMessage('ai', aiMessage);
 
-                    // Reset image state
+                    // Reset image state but keep the conversation history
                     currentImage = null;
                     imageButton.style.backgroundColor = '';
                     imageButton.textContent = 'Add Image';
+                    imageInput.value = ''; // Clear the file input
                     
-                } else if (message) {
-                    // Text-only input = Regular models
+                } else {
+                    // No image - use regular models with retry logic
+                    let success = false;
+                    let retries = 0;
+                    
+                    // Add text-only message to history
+                    conversationHistory.push({
+                        role: "user",
+                        content: message
+                    });
+
                     while (!success && retries < models.length) {
                         try {
                             const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -294,6 +302,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                             console.error(`Error with model ${models[retries]}:`, error);
                             retries++;
                         }
+                    }
+
+                    if (!success) {
+                        throw new Error('All models failed');
                     }
                 }
             } catch (error) {
