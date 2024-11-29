@@ -6,12 +6,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const mode = pathParts[pathParts.length - 2];  // Get mode from URL
     const linkId = pathParts[pathParts.length - 1];
     const models = [
+        "meta-llama/llama-3.2-90b-vision-instruct:free",
         "google/learnlm-1.5-pro-experimental:free",
         "openchat/openchat-7b:free",
         "liquid/lfm-40b:free",
         "google/gemini-exp-1121:free",
         "google/gemma-2-9b-it:free",
-        "liquid/lfm-40b:free",
         "meta-llama/llama-3.1-405b-instruct:free",
         "qwen/qwen-2-7b-instruct:free"
     ];
@@ -213,7 +213,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             try {
                 if (currentImage) {
-                    console.log("Processing image request...");
+                    console.log("Processing image request with vision model:", VISION_MODEL);
                     // If image is present, use vision model
                     const visionMessages = [
                         { 
@@ -248,7 +248,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                                 "X-Title": "Tutor-Tron"
                             },
                             body: JSON.stringify({
-                                model: "meta-llama/llama-3.2-90b-vision-instruct:free",
+                                model: VISION_MODEL,
                                 messages: visionMessages,
                                 max_tokens: 1024,
                                 temperature: 0.7,
