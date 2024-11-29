@@ -508,7 +508,6 @@ window.loadLinks = async function() {
         const linksList = document.getElementById('linksList');
         linksList.innerHTML = '';
         
-        // Sort links by creation date, newest first
         links.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         
         links.forEach(link => {
@@ -534,7 +533,6 @@ window.loadLinks = async function() {
                         white-space: nowrap;
                     "> Copy</button>
                 </div>
-                <div class="prompt-preview">${link.prompt}</div>
                 <button class="delete-link-btn" data-id="${link.id}">Delete</button>
             `;
             
