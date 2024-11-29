@@ -5,12 +5,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Add MathJax configuration
     window.MathJax = {
         tex: {
-            inlineMath: [['$', '$'], ['\\(', '\\)']],
-            displayMath: [['$$', '$$'], ['\\[', '\\]']],
-            processEscapes: true
+            inlineMath: [['$', '$']],
+            displayMath: [['$$', '$$']],
+            processEscapes: true,
+            scale: 1
         },
         svg: {
-            fontCache: 'global'
+            scale: 1,
+            minScale: 1
+        },
+        chtml: {
+            scale: 1,
+            minScale: 1
         }
     };
 
@@ -28,6 +34,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             padding: 10px;
             border-radius: 8px;
             max-width: 80%;
+            font-size: 14px;
+            line-height: 1.4;
         }
         .user-message {
             background: #e9ecef;
@@ -42,19 +50,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             padding: 2px 4px;
             border-radius: 4px;
         }
-        .math-step {
-            margin: 8px 0;
-            font-size: 14px;
-        }
-        .math-step h2 {
-            font-size: 15px;
-            margin: 5px 0;
-            color: #333;
-        }
-        .math-final {
-            margin-top: 10px;
-            padding: 5px;
-            display: inline-block;
+        .mjx-chtml {
+            font-size: 100% !important;
+            margin: 0 !important;
         }
     `;
     document.head.appendChild(style);
@@ -179,16 +177,18 @@ document.addEventListener("DOMContentLoaded", async () => {
             messageDiv.className = `message ${type}-message`;
             
             if (type === 'ai') {
-                // Convert markdown and add step classes
+                // Simple text formatting
                 content = content
-                    .replace(/## Step \d+:/g, match => `<div class="math-step">${match}`)
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                     .replace(/`([^`]+)`/g, '<code>$1</code>')
-                    .replace(/\n\n/g, '</div><div class="math-step">');
+                    .replace(/\n\n/g, '<br>')
+                    .replace(/## Step (\d+):/g, '<br><b>Step $1:</b>')
+                    .replace(/\\\((.*?)\\\)/g, '$1')  // Remove LaTeX delimiters
+                    .replace(/\\\[(.*?)\\\]/g, '$1'); // Remove LaTeX display delimiters
                 
-                messageDiv.innerHTML = content + '</div>';
+                messageDiv.innerHTML = content;
                 
-                // Process math if present
+                // Minimal MathJax config
                 if (window.MathJax && (content.includes('\\') || content.includes('$'))) {
                     window.MathJax.typesetPromise([messageDiv]);
                 }
