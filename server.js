@@ -8,36 +8,60 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-// Function to serve static files
+// Helper function for error handling
+function handleError(type, headers = {}) {
+  switch (type) {
+    case 'not-found':
+      return Response.redirect('/invalid-link.html', 302);
+    case 'unauthorized':
+      return Response.redirect('/unauthorized.html', 302);
+    case 'server-error':
+      return Response.redirect('/error.html', 302);
+    default:
+      return Response.redirect('/invalid-link.html', 302);
+  }
+}
+
+// Function to serve static files with improved error handling
 async function serveStaticFile(url, env) {
-  // Remove leading slash and handle empty path
-  const path = url.pathname.replace(/^\//, '') || 'index.html';
-  
   try {
-    // Attempt to get the file from KV storage
+    const path = url.pathname.replace(/^\//, '') || 'index.html';
+    
+    // Special handling for error pages to prevent redirect loops
+    if (['invalid-link.html', 'unauthorized.html', 'error.html'].includes(path)) {
+      const errorPage = await env.FILES.get(path);
+      if (errorPage === null) {
+        return new Response('Error page not found', { 
+          status: 500,
+          headers: { 'Content-Type': 'text/plain' }
+        });
+      }
+      return new Response(errorPage, {
+        headers: { 'Content-Type': 'text/html' },
+      });
+    }
+
     const file = await env.FILES.get(path);
     if (file === null) {
-      // Try index.html for directory requests
       if (path.endsWith('/')) {
         const indexFile = await env.FILES.get(path + 'index.html');
         if (indexFile === null) {
-          return new Response('Not Found', { status: 404 });
+          return handleError('not-found');
         }
         return new Response(indexFile, {
           headers: { 'Content-Type': 'text/html' },
         });
       }
-      return new Response('Not Found', { status: 404 });
+      return handleError('not-found');
     }
     
-    // Set appropriate content type
     const contentType = getContentType(path);
     return new Response(file, {
       headers: { 'Content-Type': contentType },
     });
   } catch (error) {
     console.error('Error serving file:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    return handleError('server-error');
   }
 }
 
@@ -81,7 +105,7 @@ const createToken = async (payload, secret) => {
 
 router.options('*', () => new Response(null, { headers: corsHeaders }));
 
-// Register route
+// Register route with error handling
 router.post('/api/auth/register', async (request, env) => {
   try {
     const { name, email, password, school, accessCode } = await request.json();
@@ -100,7 +124,6 @@ router.post('/api/auth/register', async (request, env) => {
       });
     }
 
-    // Check if email exists
     const existingTeacher = await env.TEACHERS.get(email);
     if (existingTeacher) {
       return new Response(JSON.stringify({ message: 'Email already registered' }), {
@@ -109,54 +132,43 @@ router.post('/api/auth/register', async (request, env) => {
       });
     }
 
-    // Instead of trying to generate a key directly, we'll use your master key for now
-    const openrouterKey = env.OPENROUTER_MASTER_KEY; // Your personal OpenRouter API key
-
-    // Create new teacher with the shared API key
+    const openrouterKey = env.OPENROUTER_MASTER_KEY;
     const teacherId = crypto.randomUUID();
+    
     await env.TEACHERS.put(email, JSON.stringify({
-        id: teacherId,
-        name,
-        email,
-        password,
-        school,
-        openrouterKey, // Using your master key
-        links: [],
-        createdAt: new Date().toISOString()
+      id: teacherId,
+      name,
+      email,
+      password,
+      school,
+      openrouterKey,
+      links: [],
+      createdAt: new Date().toISOString()
     }));
 
     return new Response(JSON.stringify({ message: 'Registration successful' }), {
-        status: 201,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({ message: 'Server error' }), {
-      status: 500,
+      status: 201,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+  } catch (error) {
+    console.error('Registration error:', error);
+    return handleError('server-error');
   }
 });
 
-// Login route
+// Login route with error handling
 router.post('/api/auth/login', async (request, env) => {
   try {
     const { email, password } = await request.json();
 
-    // Get teacher from KV
     const teacherData = await env.TEACHERS.get(email);
     if (!teacherData) {
-      return new Response(JSON.stringify({ message: 'Invalid credentials' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return handleError('unauthorized');
     }
 
     const teacher = JSON.parse(teacherData);
     if (teacher.password !== password) {
-      return new Response(JSON.stringify({ message: 'Invalid credentials' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return handleError('unauthorized');
     }
 
     const token = await createToken({ teacherId: teacher.id }, env.JWT_SECRET);
@@ -171,61 +183,48 @@ router.post('/api/auth/login', async (request, env) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ message: 'Server error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('Login error:', error);
+    return handleError('server-error');
   }
 });
 
-// Verify token route
+// Verify token route with error handling
 router.get('/api/auth/verify', async (request, env) => {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ message: 'No token provided' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return handleError('unauthorized');
     }
 
     const token = authHeader.split(' ')[1];
-    // Verify token logic here
-    // For now, just return success
     return new Response(JSON.stringify({ valid: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ message: 'Invalid token' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('Token verification error:', error);
+    return handleError('server-error');
   }
 });
 
-// Create link route
+// Create link route with error handling
 router.post('/api/links', async (request, env) => {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ message: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return handleError('unauthorized');
     }
 
     const { subject, prompt, mode } = await request.json();
     const token = authHeader.split(' ')[1];
     
-    // Decode the JWT token
     const [header, payload, signature] = token.split('.');
     const decodedPayload = JSON.parse(atob(payload));
     const teacherId = decodedPayload.teacherId;
 
-    // Find teacher by ID
     let foundTeacher = null;
     let teacherKey = null;
     const teachersList = await env.TEACHERS.list();
+    
     for (const key of teachersList.keys) {
       const teacherData = await env.TEACHERS.get(key.name);
       const teacher = JSON.parse(teacherData);
@@ -237,10 +236,7 @@ router.post('/api/links', async (request, env) => {
     }
 
     if (!foundTeacher) {
-      return new Response(JSON.stringify({ message: 'Teacher not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return handleError('not-found');
     }
 
     const linkId = crypto.randomUUID();
@@ -259,34 +255,27 @@ router.post('/api/links', async (request, env) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ message: 'Server error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('Link creation error:', error);
+    return handleError('server-error');
   }
 });
 
-// Get links route
+// Get links route with error handling
 router.get('/api/links', async (request, env) => {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ message: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return handleError('unauthorized');
     }
 
     const token = authHeader.split(' ')[1];
-    // Decode the JWT token to get the teacher ID
     const [header, payload, signature] = token.split('.');
     const decodedPayload = JSON.parse(atob(payload));
     const teacherId = decodedPayload.teacherId;
 
-    // Find teacher by ID
     let foundTeacher = null;
-    // List all teachers and find the one with matching ID
     const teachersList = await env.TEACHERS.list();
+    
     for (const key of teachersList.keys) {
       const teacherData = await env.TEACHERS.get(key.name);
       const teacher = JSON.parse(teacherData);
@@ -297,44 +286,35 @@ router.get('/api/links', async (request, env) => {
     }
 
     if (!foundTeacher) {
-      return new Response(JSON.stringify({ message: 'Teacher not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return handleError('not-found');
     }
 
     return new Response(JSON.stringify(foundTeacher.links || []), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ message: 'Server error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('Get links error:', error);
+    return handleError('server-error');
   }
 });
 
-// Delete link route
+// Delete link route with error handling
 router.delete('/api/links/:linkId', async (request, env) => {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ message: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return handleError('unauthorized');
     }
 
     const token = authHeader.split(' ')[1];
-    // Decode the JWT token
     const [header, payload, signature] = token.split('.');
     const decodedPayload = JSON.parse(atob(payload));
     const teacherId = decodedPayload.teacherId;
 
-    // Find teacher by ID
     let foundTeacher = null;
     let teacherKey = null;
     const teachersList = await env.TEACHERS.list();
+    
     for (const key of teachersList.keys) {
       const teacherData = await env.TEACHERS.get(key.name);
       const teacher = JSON.parse(teacherData);
@@ -346,10 +326,7 @@ router.delete('/api/links/:linkId', async (request, env) => {
     }
 
     if (!foundTeacher) {
-      return new Response(JSON.stringify({ message: 'Teacher not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return handleError('not-found');
     }
 
     const { linkId } = request.params;
@@ -360,122 +337,110 @@ router.delete('/api/links/:linkId', async (request, env) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ message: 'Server error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('Delete link error:', error);
+    return handleError('server-error');
   }
 });
 
-// Add this route BEFORE the catch-all route
+// Environment variables route with error handling
 router.get('/api/env', async (request, env) => {
+  try {
     return new Response(JSON.stringify({
-        OPENROUTER_API_KEY: env.OPENROUTER_API_KEY || '',
-        DEEPGRAM_API_KEY: env.DEEPGRAM_API_KEY || ''
+      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY || '',
+      DEEPGRAM_API_KEY: env.DEEPGRAM_API_KEY || ''
     }), {
-        headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-        }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+  } catch (error) {
+    console.error('Environment variables error:', error);
+    return handleError('server-error');
+  }
 });
 
-// Update the /api/keys route to return a random API key
+// API keys route with error handling
 router.get('/api/keys', async (request, env) => {
-    try {
-        const authHeader = request.headers.get('Authorization');
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return new Response(JSON.stringify({ message: 'Unauthorized' }), {
-                status: 401,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-        }
-
-        // Get array of API keys
-        const apiKeys = env.OPENROUTER_API_KEYS.split(',');
-        // Return random key from the array
-        const randomKey = apiKeys[Math.floor(Math.random() * apiKeys.length)];
-
-        return new Response(JSON.stringify({
-            OPENROUTER_API_KEY: randomKey,
-            DEEPGRAM_API_KEY: env.DEEPGRAM_API_KEY
-        }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-    } catch (error) {
-        return new Response(JSON.stringify({ message: 'Server error' }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+  try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return handleError('unauthorized');
     }
+
+    const apiKeys = env.OPENROUTER_API_KEYS.split(',');
+    const randomKey = apiKeys[Math.floor(Math.random() * apiKeys.length)];
+
+    return new Response(JSON.stringify({
+      OPENROUTER_API_KEY: randomKey,
+      DEEPGRAM_API_KEY: env.DEEPGRAM_API_KEY
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.error('API keys error:', error);
+    return handleError('server-error');
+  }
 });
 
-// Update the tutor route to handle different modes
+// Tutor route with error handling
 router.get('/:mode/:linkId', async (request, env) => {
-    try {
-        const { mode, linkId } = request.params;
-        console.log('Looking for link:', linkId, 'Mode:', mode);
+  try {
+    const { mode, linkId } = request.params;
+    console.log('Looking for link:', linkId, 'Mode:', mode);
 
-        // Validate mode
-        const validModes = ['investigator', 'comparitor', 'quest', 'codebreaker', 'eliminator'];
-        if (!validModes.includes(mode)) {
-            return Response.redirect('/invalid-link.html', 302);
+    const validModes = ['investigator', 'comparitor', 'quest', 'codebreaker', 'eliminator'];
+    if (!validModes.includes(mode)) {
+      return handleError('not-found');
+    }
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(linkId)) {
+      console.log('Invalid link format:', linkId);
+      return handleError('not-found');
+    }
+    
+    let foundLink = null;
+    const teachersList = await env.TEACHERS.list();
+    
+    for (const key of teachersList.keys) {
+      const teacherData = await env.TEACHERS.get(key.name);
+      const teacher = JSON.parse(teacherData);
+      
+      if (teacher.links) {
+        const link = teacher.links.find(l => l.id === linkId && l.mode === mode);
+        if (link) {
+          foundLink = link;
+          break;
         }
+      }
+    }
 
-        // Validate linkId format (should be UUID)
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (!uuidRegex.test(linkId)) {
-            console.log('Invalid link format:', linkId);
-            return Response.redirect('/invalid-link.html', 302);
-        }
-        
-        // Find teacher that has this link
-        let foundLink = null;
-        const teachersList = await env.TEACHERS.list();
-        
-        for (const key of teachersList.keys) {
-            const teacherData = await env.TEACHERS.get(key.name);
-            const teacher = JSON.parse(teacherData);
-            
-            if (teacher.links) {
-                const link = teacher.links.find(l => l.id === linkId && l.mode === mode);
-                if (link) {
-                    foundLink = link;
-                    break;
-                }
-            }
-        }
+    if (!foundLink) {
+      console.log('Link not found:', linkId);
+      return handleError('not-found');
+    }
 
-        if (!foundLink) {
-            console.log('Link not found:', linkId);
-            return Response.redirect('/invalid-link.html', 302);
-        }
+    // Get the tutor HTML
+    let tutorHtml = await env.FILES.get('tutor.html');
+    if (!tutorHtml) {
+      return new Response('Tutor page not found', { status: 404 });
+    }
 
-        console.log('Found link:', foundLink);
+    // Set background color based on mode
+    const bgColors = {
+        investigator: '#f0fdf4', // light green
+        comparitor: '#eff6ff',   // light blue
+        quest: '#fff1f2',         // light rose
+        codebreaker: '#000000',    // black
+        eliminator: '#1a0000'     // dark red
+    };
 
-        // Get the tutor HTML
-        let tutorHtml = await env.FILES.get('tutor.html');
-        if (!tutorHtml) {
-            return new Response('Tutor page not found', { status: 404 });
-        }
-
-        // Set background color based on mode
-        const bgColors = {
-            investigator: '#f0fdf4', // light green
-            comparitor: '#eff6ff',   // light blue
-            quest: '#fff1f2',         // light rose
-            codebreaker: '#000000',    // black
-            eliminator: '#1a0000'     // dark red
-        };
-
-        // Update the title and background color
-        tutorHtml = tutorHtml.replace(
-            '<title>Tutor-Tron AI Investigator</title>',
-            `<title>${mode.charAt(0).toUpperCase() + mode.slice(1)} - Tutor-Tron</title>`
-        ).replace(
-            '--background-color: #F3F4F6;',
-            `--background-color: ${bgColors[mode]};`
-        ).replace(
+    // Update the title and background color
+    tutorHtml = tutorHtml.replace(
+        '<title>Tutor-Tron AI Investigator</title>',
+        `<title>${mode.charAt(0).toUpperCase() + mode.slice(1)} - Tutor-Tron</title>`
+    ).replace(
+        '--background-color: #F3F4F6;',
+        `--background-color: ${bgColors[mode]};`
+    ).replace(
             'Tutor-Tron AI Investigator',
             `${mode.charAt(0).toUpperCase() + mode.slice(1)} - Tutor-Tron`
         );
