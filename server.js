@@ -464,6 +464,85 @@ router.get('/api/env', async (request, env) => {
   });
 });
 
+// Handle tutor mode routes
+router.get('/:mode/:linkId', async (request, env) => {
+  try {
+    const { mode, linkId } = request.params;
+    console.log('Looking for link:', linkId, 'Mode:', mode);
+
+    // Validate mode
+    const validModes = ['investigator', 'comparitor', 'quest', 'codebreaker', 'eliminator'];
+    if (!validModes.includes(mode)) {
+      return Response.redirect('/invalid-link.html', 302);
+    }
+
+    // Validate linkId format (should be UUID)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(linkId)) {
+      console.log('Invalid link format:', linkId);
+      return Response.redirect('/invalid-link.html', 302);
+    }
+    
+    // Find teacher that has this link
+    let foundLink = null;
+    const teachersList = await env.TEACHERS.list();
+    
+    for (const key of teachersList.keys) {
+      const teacherData = await env.TEACHERS.get(key.name);
+      const teacher = JSON.parse(teacherData);
+      
+      if (teacher.links) {
+        const link = teacher.links.find(l => l.id === linkId && l.mode === mode);
+        if (link) {
+          foundLink = link;
+          break;
+        }
+      }
+    }
+
+    if (!foundLink) {
+      console.log('Link not found:', linkId);
+      return Response.redirect('/invalid-link.html', 302);
+    }
+
+    console.log('Found link:', foundLink);
+
+    // Get the tutor HTML
+    let tutorHtml = await env.FILES.get('tutor.html');
+    if (!tutorHtml) {
+      return new Response('Tutor page not found', { status: 404 });
+    }
+
+    // Set background color based on mode
+    const bgColors = {
+      investigator: '#f0fdf4', // light green
+      comparitor: '#eff6ff',   // light blue
+      quest: '#fff1f2',        // light rose
+      codebreaker: '#000000',  // black
+      eliminator: '#1a0000'    // dark red
+    };
+
+    // Update the title and background color
+    tutorHtml = tutorHtml.replace(
+      '<title>Tutor-Tron AI Investigator</title>',
+      `<title>${mode.charAt(0).toUpperCase() + mode.slice(1)} - Tutor-Tron</title>`
+    ).replace(
+      '--background-color: #F3F4F6;',
+      `--background-color: ${bgColors[mode]};`
+    ).replace(
+      'Tutor-Tron AI Investigator',
+      `${mode.charAt(0).toUpperCase() + mode.slice(1)} - Tutor-Tron`
+    );
+
+    return new Response(tutorHtml, {
+      headers: { 'Content-Type': 'text/html' },
+    });
+  } catch (error) {
+    console.error('Error serving tutor page:', error);
+    return Response.redirect('/invalid-link.html', 302);
+  }
+});
+
 // Handle CORS preflight requests
 router.options('*', () => new Response(null, { headers: corsHeaders }));
 
