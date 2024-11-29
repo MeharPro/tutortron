@@ -118,18 +118,21 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Function to create and append a message
         function formatMathContent(content) {
+            // Format bullet points
+            content = content.replace(/^\* /gm, '• ');
+            
             // Format step headers
-            content = content.replace(/## Step (\d+)/g, '**Step $1**');
+            content = content.replace(/^Step (\d+)/gm, '\nStep $1');
             
             // Format LaTeX equations
-            content = content.replace(/\\\((.*?)\\\)/g, '`$1`');
-            content = content.replace(/\\\[(.*?)\\\]/g, '`$1`');
+            content = content.replace(/\\tan/g, 'tan');  // Simplify tan notation
+            content = content.replace(/\\left/g, '');    // Remove \left
+            content = content.replace(/\\right/g, '');   // Remove \right
+            content = content.replace(/\\\((.*?)\\\)/g, '$1');
+            content = content.replace(/\\\[(.*?)\\\]/g, '$1');
             
-            // Format boxed answer
-            content = content.replace(/\$\\boxed{(.*?)}\$/, '**Final Answer:** `$1`');
-            
-            // Add line breaks between steps
-            content = content.split('\n\n').join('\n');
+            // Format final answer
+            content = content.replace(/Final Answer: (.*)$/, 'Final Answer: $1');
             
             return content;
         }
@@ -146,9 +149,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 
                 // Convert markdown
                 content = content
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/`([^`]+)`/g, '<span class="math">$1</span>')
-                    .replace(/\n/g, '<br>');
+                    .replace(/\n/g, '<br>')
+                    .replace(/^• (.*)/gm, '<span class="bullet">•</span> $1');
                 
                 messageDiv.innerHTML = content;
                 
@@ -164,7 +166,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        // Add minimal styling for math content
+        // Add minimal styling
         const style = document.createElement('style');
         style.textContent = `
             .message {
@@ -183,14 +185,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 background: #f8f9fa;
                 margin-right: auto;
             }
-            .math {
-                font-family: 'Times New Roman', serif;
-                padding: 0 4px;
-                color: #1a1a1a;
-            }
-            strong {
-                color: #2c3e50;
-                font-weight: 600;
+            .bullet {
+                color: #666;
+                margin-right: 5px;
             }
         `;
         document.head.appendChild(style);
