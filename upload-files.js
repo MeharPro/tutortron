@@ -14,7 +14,10 @@ const publicFiles = [
     'teacher-dashboard.js',
     'register.js',
     'index.js',
-    'tutor.css'
+    'tutor.css',
+    'codebreaker.css',
+    'index.css',
+    'style.css'
 ];
 
 // List of files to upload from root directory
