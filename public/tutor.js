@@ -99,8 +99,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Define models
     const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
     const models = [
-        "meta-llama/llama-3.2-90b-vision-instruct:free",
         "google/learnlm-1.5-pro-experimental:free",
+        "meta-llama/llama-3.2-90b-vision-instruct:free",
         "openchat/openchat-7b:free",
         "liquid/lfm-40b:free",
         "google/gemini-exp-1121:free",
@@ -293,6 +293,31 @@ document.addEventListener("DOMContentLoaded", async () => {
         .hljs {
             background: #1e1e1e;
             color: #d4d4d4;
+        }
+        /* Syntax colors */
+        .hljs-keyword {
+            color: #569cd6;  /* blue for keywords like int, for, if */
+        }
+        .hljs-built_in {
+            color: #4ec9b0;  /* teal for built-in types */
+        }
+        .hljs-number {
+            color: #b5cea8;  /* light green for numbers */
+        }
+        .hljs-comment {
+            color: #6a9955;  /* green for comments */
+        }
+        .hljs-string {
+            color: #ce9178;  /* orange for strings */
+        }
+        .hljs-operator {
+            color: #d4d4d4;  /* white for operators */
+        }
+        .hljs-function {
+            color: #dcdcaa;  /* yellow for functions */
+        }
+        .hljs-variable {
+            color: #9cdcfe;  /* light blue for variables */
         }
     `;
     document.head.appendChild(codeStyle);
