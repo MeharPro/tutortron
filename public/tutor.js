@@ -2,6 +2,76 @@ console.log('tutor.js loaded');
 document.addEventListener("DOMContentLoaded", async () => {
     await window.envLoaded;
     
+    // Add MathJax configuration
+    window.MathJax = {
+        tex: {
+            inlineMath: [['$', '$'], ['\\(', '\\)']],
+            displayMath: [['$$', '$$'], ['\\[', '\\]']],
+            processEscapes: true
+        },
+        svg: {
+            fontCache: 'global'
+        }
+    };
+
+    // Load MathJax
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js';
+    script.async = true;
+    document.head.appendChild(script);
+
+    // Add CSS for math content
+    const style = document.createElement('style');
+    style.textContent = `
+        .math-content {
+            font-family: 'Times New Roman', serif;
+            line-height: 1.6;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .math-content h1 {
+            color: #2c3e50;
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+
+        .math-content h2 {
+            color: #34495e;
+            font-size: 1.2em;
+            margin: 15px 0 10px 0;
+        }
+
+        .math-content code {
+            background: #fff;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .math-content ul {
+            margin-left: 20px;
+            list-style-type: disc;
+        }
+
+        .math-content .boxed {
+            border: 2px solid #3498db;
+            padding: 10px;
+            margin: 10px 0;
+            display: inline-block;
+            border-radius: 4px;
+        }
+
+        .math-content strong {
+            color: #2c3e50;
+        }
+    `;
+    document.head.appendChild(style);
+
     const pathParts = window.location.pathname.split('/');
     const mode = pathParts[pathParts.length - 2];  // Get mode from URL
     const linkId = pathParts[pathParts.length - 1];
@@ -122,14 +192,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             messageDiv.className = `message ${type}-message`;
             
             if (type === 'ai') {
+                // Check if content contains math markers
+                const hasMath = content.includes('\\') || content.includes('$') || 
+                              content.includes('\\boxed') || content.includes('\\frac');
+                
+                if (hasMath) {
+                    messageDiv.className += ' math-content';
+                }
+
                 // First, handle code blocks separately
                 content = content.replace(/```(\w+)?\s*([\s\S]*?)```/g, (match, lang, code) => {
-                    // Clean up the code block
                     const cleanCode = code.trim()
-                        .replace(/^\n+|\n+$/g, '')  // Remove leading/trailing newlines
-                        .replace(/\t/g, '    ');     // Convert tabs to spaces
+                        .replace(/^\n+|\n+$/g, '')
+                        .replace(/\t/g, '    ');
                     
-                    // Map language names
                     let language = (lang || 'text').toLowerCase();
                     if (language === 'c++') language = 'cpp';
                     
@@ -138,22 +214,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 // Then handle other markdown elements
                 content = content
-                    // Handle bold text
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    // Handle inline code
                     .replace(/`([^`]+)`/g, '<code>$1</code>')
-                    // Handle bullet points
                     .replace(/^\* (.+)$/gm, '<li>$1</li>')
                     .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
-                    // Handle numbered lists
                     .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
                     .replace(/(<li>.*<\/li>)/gs, '<ol>$1</ol>')
-                    // Handle paragraphs (but not inside code blocks)
                     .split('\n\n')
                     .map(p => !p.includes('<pre>') ? `<p>${p}</p>` : p)
                     .join('');
                 
                 messageDiv.innerHTML = content;
+                
+                if (hasMath && window.MathJax) {
+                    window.MathJax.typesetPromise([messageDiv]).catch((err) => 
+                        console.error('MathJax error:', err)
+                    );
+                }
+
                 highlightCode(messageDiv);
             } else {
                 messageDiv.textContent = content;
@@ -601,5 +679,86 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         }
         throw new Error('All vision models failed');
+    }
+
+    // Add a helper function for formatting mathematical responses
+    function formatMathResponse(steps) {
+        return `
+# Problem Analysis
+${steps.problem}
+
+# Step-by-Step Solution
+${steps.steps.map((step, index) => `## Step ${index + 1}: ${step}`).join('\n\n')}
+
+# Final Answer
+${steps.answer}
+`;
+    }
+
+    // Example usage in your message handling
+    function createMathResponse() {
+        const mathSteps = {
+            problem: `Let's solve the equation: 
+\`3 tan(x) - 2 tan(x) / (1 - tan²(x)) = 0\`
+
+This equation involves:
+• Trigonometric function tan(x)
+• Rational expressions
+• Variable x`,
+
+            steps: [
+                `**Simplify the Equation**
+\`3 tan(x) - \\frac{2 tan(x)}{1 - tan²(x)} = 0\``,
+
+                `**Factor out tan(x)**
+\`tan(x) \\left(3 - \\frac{2}{1 - tan²(x)}\\right) = 0\``,
+
+                `**Find First Solution**
+Setting \`tan(x) = 0\` gives us \`x = 0\` as our first solution.`,
+
+                `**Solve the Other Factor**
+\`3 - \\frac{2}{1 - tan²(x)} = 0\`
+Simplify to: \`\\frac{2}{1 - tan²(x)} = 3\`
+Then: \`2 = 3 - 3tan²(x)\``,
+
+                `**Solve for tan²(x)**
+\`3tan²(x) = 1\`
+Therefore: \`tan²(x) = \\frac{1}{3}\``,
+
+                `**Find tan(x)**
+Taking the square root:
+\`tan(x) = ±\\frac{1}{\\sqrt{3}}\``,
+
+                `**Find All Solutions**
+For \`tan(x) = \\frac{1}{\\sqrt{3}}\`: \`x = \\frac{π}{6} + kπ\`
+For \`tan(x) = -\\frac{1}{\\sqrt{3}}\`: \`x = -\\frac{π}{6} + kπ\`
+Where k is an integer.`
+            ],
+
+            answer: `**Final Answer:** \`\\boxed{x = 0, \\frac{π}{6}, -\\frac{π}{6}}\`
+
+Note: These are the principal solutions in the interval \`[-π, π]\`.`
+        };
+
+        return formatMathResponse(mathSteps);
+    }
+
+    // Add this to your message handling logic
+    function appendMathMessage(type, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}-message math-content`;
+        
+        // Add MathJax processing
+        if (type === 'ai') {
+            messageDiv.innerHTML = content;
+            if (window.MathJax) {
+                window.MathJax.typesetPromise([messageDiv]).catch((err) => console.error('MathJax error:', err));
+            }
+        } else {
+            messageDiv.textContent = content;
+        }
+        
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 }); 
