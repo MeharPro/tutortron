@@ -2,61 +2,6 @@ console.log('tutor.js loaded');
 document.addEventListener("DOMContentLoaded", async () => {
     await window.envLoaded;
     
-    // Add MathJax configuration
-    window.MathJax = {
-        tex: {
-            inlineMath: [['$', '$']],
-            displayMath: [['$$', '$$']],
-            processEscapes: true,
-            scale: 1
-        },
-        svg: {
-            scale: 1,
-            minScale: 1
-        },
-        chtml: {
-            scale: 1,
-            minScale: 1
-        }
-    };
-
-    // Load MathJax
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js';
-    script.async = true;
-    document.head.appendChild(script);
-
-    // Add CSS for math content
-    const style = document.createElement('style');
-    style.textContent = `
-        .message {
-            margin: 10px;
-            padding: 10px;
-            border-radius: 8px;
-            max-width: 80%;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-        .user-message {
-            background: #e9ecef;
-            margin-left: auto;
-        }
-        .ai-message {
-            background: #f8f9fa;
-            margin-right: auto;
-        }
-        code {
-            background: #f1f3f4;
-            padding: 2px 4px;
-            border-radius: 4px;
-        }
-        .mjx-chtml {
-            font-size: 100% !important;
-            margin: 0 !important;
-        }
-    `;
-    document.head.appendChild(style);
-
     const pathParts = window.location.pathname.split('/');
     const mode = pathParts[pathParts.length - 2];  // Get mode from URL
     const linkId = pathParts[pathParts.length - 1];
@@ -177,21 +122,39 @@ document.addEventListener("DOMContentLoaded", async () => {
             messageDiv.className = `message ${type}-message`;
             
             if (type === 'ai') {
-                // Simple text formatting
+                // First, handle code blocks separately
+                content = content.replace(/```(\w+)?\s*([\s\S]*?)```/g, (match, lang, code) => {
+                    // Clean up the code block
+                    const cleanCode = code.trim()
+                        .replace(/^\n+|\n+$/g, '')  // Remove leading/trailing newlines
+                        .replace(/\t/g, '    ');     // Convert tabs to spaces
+                    
+                    // Map language names
+                    let language = (lang || 'text').toLowerCase();
+                    if (language === 'c++') language = 'cpp';
+                    
+                    return `<pre><code class="language-${language}">${cleanCode}</code></pre>`;
+                });
+
+                // Then handle other markdown elements
                 content = content
+                    // Handle bold text
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    // Handle inline code
                     .replace(/`([^`]+)`/g, '<code>$1</code>')
-                    .replace(/\n\n/g, '<br>')
-                    .replace(/## Step (\d+):/g, '<br><b>Step $1:</b>')
-                    .replace(/\\\((.*?)\\\)/g, '$1')  // Remove LaTeX delimiters
-                    .replace(/\\\[(.*?)\\\]/g, '$1'); // Remove LaTeX display delimiters
+                    // Handle bullet points
+                    .replace(/^\* (.+)$/gm, '<li>$1</li>')
+                    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+                    // Handle numbered lists
+                    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+                    .replace(/(<li>.*<\/li>)/gs, '<ol>$1</ol>')
+                    // Handle paragraphs (but not inside code blocks)
+                    .split('\n\n')
+                    .map(p => !p.includes('<pre>') ? `<p>${p}</p>` : p)
+                    .join('');
                 
                 messageDiv.innerHTML = content;
-                
-                // Minimal MathJax config
-                if (window.MathJax && (content.includes('\\') || content.includes('$'))) {
-                    window.MathJax.typesetPromise([messageDiv]);
-                }
+                highlightCode(messageDiv);
             } else {
                 messageDiv.textContent = content;
             }
@@ -532,14 +495,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     imageInput.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file) {
-            if (file.size > 1024 * 1024) { // 1MB limit instead of 2MB
-                alert('Image is too large. Please use an image under 1MB.');
+            if (file.size > 1024 * 1024 * 2) { // 2MB limit
+                alert('Image is too large. Please use an image under 2MB.');
                 return;
             }
             const reader = new FileReader();
             reader.onload = function(e) {
                 const base64Full = e.target.result;
-                currentImage = base64Full.split(',')[1];
+                currentImage = base64Full.split(',')[1]; // Get base64 part
                 console.log("Image format:", file.type);
                 console.log("Image size:", file.size);
                 console.log("Base64 length:", currentImage.length);
@@ -551,7 +514,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     const VISION_MODELS = [
-        "meta-llama/llama-3.2-90b-vision-instruct:free"
+        "meta-llama/llama-3.2-90b-vision-instruct:free",
+
     ];
 
     const TEXT_MODELS = [
@@ -572,38 +536,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         for (const model of VISION_MODELS) {
             try {
                 console.log(`Attempting vision model: ${model}, attempt ${retryCount + 1}`);
-                
-                // Simplify the request to match the Python implementation
-                const requestBody = {
-                    model: model,
-                    messages: [
-                        {
-                            role: "user",
-                            content: [
-                                {
-                                    type: "text",
-                                    text: visionMessages[1].content[1].text
-                                },
-                                {
-                                    type: "image_url",
-                                    image_url: {
-                                        url: `data:image/jpeg;base64,${currentImage}`
-                                    }
-                                }
-                            ]
-                        }
-                    ]
-                };
-
-                console.log("Request body:", JSON.stringify(requestBody, null, 2));
-
                 const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                     method: "POST",
                     headers: {
                         Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": window.location.origin,
+                        "X-Title": "Tutor-Tron"
                     },
-                    body: JSON.stringify(requestBody)
+                    body: JSON.stringify({
+                        model: model,
+                        messages: visionMessages,
+                        max_tokens: 1024,
+                        temperature: 0.7,
+                        top_p: 0.9,
+                        stream: false,
+                        seed: Math.floor(Math.random() * 1000000)
+                    })
                 });
 
                 const responseText = await response.text();
@@ -612,7 +561,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (!response.ok) {
                     const errorData = JSON.parse(responseText);
                     if (errorData.error?.code === 429 && retryCount < 3) {
-                        const waitTime = Math.pow(2, retryCount) * 1000;
+                        // Rate limit hit, wait and retry
+                        const waitTime = Math.pow(2, retryCount) * 1000; // Exponential backoff
                         console.log(`Rate limit hit, waiting ${waitTime}ms before retry...`);
                         await delay(waitTime);
                         return tryVisionModel(visionMessages, retryCount + 1);
@@ -622,95 +572,23 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 const data = JSON.parse(responseText);
                 
+                // Check for model-specific errors
                 if (data.choices?.[0]?.error) {
                     console.error(`Error from ${model}:`, data.choices[0].error);
-                    continue;
+                    continue; // Try next model
                 }
 
                 if (!data.choices?.[0]?.message?.content?.trim()) {
                     console.error(`Empty response from ${model}`);
-                    continue;
+                    continue; // Try next model
                 }
 
                 return data.choices[0].message.content.trim();
             } catch (error) {
                 console.error(`Error with ${model}:`, error);
+                // Continue to next model
             }
         }
         throw new Error('All vision models failed');
-    }
-
-    // Add a helper function for formatting mathematical responses
-    function formatMathResponse(steps) {
-        return `${steps.problem}\n\n${steps.steps.map((step, index) => 
-            `Step ${index + 1}: ${step}`
-        ).join('\n')}\n\nAnswer: ${steps.answer}`;
-    }
-
-    // Example usage in your message handling
-    function createMathResponse() {
-        const mathSteps = {
-            problem: `Let's solve the equation: 
-\`3 tan(x) - 2 tan(x) / (1 - tan²(x)) = 0\`
-
-This equation involves:
-• Trigonometric function tan(x)
-• Rational expressions
-• Variable x`,
-
-            steps: [
-                `**Simplify the Equation**
-\`3 tan(x) - \\frac{2 tan(x)}{1 - tan²(x)} = 0\``,
-
-                `**Factor out tan(x)**
-\`tan(x) \\left(3 - \\frac{2}{1 - tan²(x)}\\right) = 0\``,
-
-                `**Find First Solution**
-Setting \`tan(x) = 0\` gives us \`x = 0\` as our first solution.`,
-
-                `**Solve the Other Factor**
-\`3 - \\frac{2}{1 - tan²(x)} = 0\`
-Simplify to: \`\\frac{2}{1 - tan²(x)} = 3\`
-Then: \`2 = 3 - 3tan²(x)\``,
-
-                `**Solve for tan²(x)**
-\`3tan²(x) = 1\`
-Therefore: \`tan²(x) = \\frac{1}{3}\``,
-
-                `**Find tan(x)**
-Taking the square root:
-\`tan(x) = ±\\frac{1}{\\sqrt{3}}\``,
-
-                `**Find All Solutions**
-For \`tan(x) = \\frac{1}{\\sqrt{3}}\`: \`x = \\frac{π}{6} + kπ\`
-For \`tan(x) = -\\frac{1}{\\sqrt{3}}\`: \`x = -\\frac{π}{6} + kπ\`
-Where k is an integer.`
-            ],
-
-            answer: `**Final Answer:** \`\\boxed{x = 0, \\frac{π}{6}, -\\frac{π}{6}}\`
-
-Note: These are the principal solutions in the interval \`[-π, π]\`.`
-        };
-
-        return formatMathResponse(mathSteps);
-    }
-
-    // Add this to your message handling logic
-    function appendMathMessage(type, content) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${type}-message math-content`;
-        
-        // Add MathJax processing
-        if (type === 'ai') {
-            messageDiv.innerHTML = content;
-            if (window.MathJax) {
-                window.MathJax.typesetPromise([messageDiv]).catch((err) => console.error('MathJax error:', err));
-            }
-        } else {
-            messageDiv.textContent = content;
-        }
-        
-        chatContainer.appendChild(messageDiv);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 }); 
