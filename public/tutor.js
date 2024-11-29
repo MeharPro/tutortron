@@ -2,6 +2,52 @@ console.log('tutor.js loaded');
 document.addEventListener("DOMContentLoaded", async () => {
     await window.envLoaded;
     
+    // MathJax configuration and loading
+    function initMathJax() {
+        window.MathJax = {
+            loader: {load: ['[tex]/ams']},
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: true,
+                packages: {'[+]': ['ams']}
+            },
+            startup: {
+                ready() {
+                    MathJax.startup.defaultReady();
+                }
+            }
+        };
+
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+        script.async = true;
+        document.head.appendChild(script);
+    }
+
+    // Initialize MathJax
+    initMathJax();
+
+    // Function to typeset math with retry
+    async function typesetMath(element) {
+        let retries = 0;
+        const maxRetries = 5;
+        
+        while (retries < maxRetries) {
+            if (window.MathJax?.typesetPromise) {
+                try {
+                    await window.MathJax.typesetPromise([element]);
+                    return;
+                } catch (error) {
+                    console.error('MathJax typesetting error:', error);
+                }
+            }
+            await new Promise(resolve => setTimeout(resolve, 500));
+            retries++;
+        }
+        console.error('Failed to render math after', maxRetries, 'attempts');
+    }
+
     const pathParts = window.location.pathname.split('/');
     const mode = pathParts[pathParts.length - 2];  // Get mode from URL
     const linkId = pathParts[pathParts.length - 1];
@@ -114,65 +160,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             appendMessage('error', 'Failed to initialize Tutor-Tron. Please try refreshing the page.');
         } finally {
             loadingDiv.style.display = 'none';
-        }
-
-        // MathJax configuration
-        window.MathJax = {
-            loader: {load: ['[tex]/ams']},
-            tex: {
-                inlineMath: [['$', '$']],
-                displayMath: [['$$', '$$']],
-                processEscapes: true,
-                packages: {'[+]': ['ams']}
-            },
-            startup: {
-                ready() {
-                    MathJax.startup.defaultReady();
-                }
-            }
-        };
-
-        // Function to load MathJax
-        function loadMathJax() {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
-                script.async = true;
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        }
-
-        // Load MathJax
-        try {
-            await loadMathJax();
-            console.log('MathJax loaded successfully');
-        } catch (err) {
-            console.error('Failed to load MathJax:', err);
-        }
-
-        // Function to typeset math with retry
-        async function typesetMath(element) {
-            let retries = 0;
-            const maxRetries = 5;
-            
-            while (retries < maxRetries) {
-                try {
-                    if (window.MathJax && window.MathJax.typesetPromise) {
-                        await window.MathJax.typesetPromise([element]);
-                        return;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    retries++;
-                } catch (error) {
-                    console.error('MathJax error:', error);
-                    retries++;
-                    if (retries === maxRetries) {
-                        console.error('Failed to render math after', maxRetries, 'attempts');
-                    }
-                }
-            }
         }
 
         function formatMathContent(content) {
@@ -604,7 +591,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     // Load MathJax at startup
-    loadMathJax().catch(err => 
+    initMathJax().catch(err => 
         console.error('Failed to load MathJax:', err)
     );
 }); 
