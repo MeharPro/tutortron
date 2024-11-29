@@ -19,19 +19,10 @@ function handleError(type, request) {
   }
 }
 
-// Add logging middleware
-router.all('*', async (request, env, ctx) => {
-  console.log(`[${new Date().toISOString()}] ${request.method} ${request.url}`);
-  try {
-    const response = await router.handle(request).catch(error => {
-      console.error('Router error:', error);
-      return handleError('server-error', request);
-    });
-    return response;
-  } catch (error) {
-    console.error('Middleware error:', error);
-    return handleError('server-error', request);
-  }
+// Add logging middleware just before the catch-all route
+router.get('/api/*', async (request, env) => {
+  console.log(`[${new Date().toISOString()}] API Request: ${request.url}`);
+  return new Response('Not Found', { status: 404 });
 });
 
 // Update serveStaticFile function
@@ -579,17 +570,15 @@ router.post('/api/report-error', async (request, env) => {
     }
 });
 
-// Add catch-all route at the end
+// Update the catch-all route
 router.all('*', async (request, env) => {
   const url = new URL(request.url);
+  console.log(`[${new Date().toISOString()}] ${request.method} ${url.pathname}`);
   
-  // If it's an API request, return 404
-  if (url.pathname.startsWith('/api/')) {
-    return handleError('not-found', request);
-  }
-
   // List of valid static files/paths
   const validPaths = [
+    '',
+    '/',
     'index.html',
     'tutor.html',
     'pros-only-teachers.html',
@@ -606,13 +595,13 @@ router.all('*', async (request, env) => {
   const path = url.pathname.replace(/^\//, '') || 'index.html';
   
   // Check if path is valid or matches tutor mode pattern
-  if (!validPaths.includes(path) && 
-      !path.match(/^(investigator|comparitor|quest|codebreaker|eliminator)\/[0-9a-f-]+$/)) {
-    console.log(`Invalid path requested: ${path}`);
-    return handleError('not-found', request);
+  if (validPaths.includes(path) || 
+      path.match(/^(investigator|comparitor|quest|codebreaker|eliminator)\/[0-9a-f-]+$/)) {
+    return serveStaticFile(url, env, request);
   }
 
-  return serveStaticFile(url, env, request);
+  console.log(`Invalid path requested: ${path}`);
+  return handleError('not-found', request);
 });
 
 export default {
