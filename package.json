@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "wrangler dev",
-    "deploy": "git add . && git diff-index --quiet HEAD || git commit -m \"Auto-deploy update $(date)\" && git push origin main && wrangler deploy",
+    "deploy": "git add . && git diff-index --quiet HEAD && node upload-files.js|| git commit -m \"Auto-deploy update $(date)\" && git push origin main && wrangler deploy",
     "deploy:prod": "git add . && git diff-index --quiet HEAD || git commit -m \"Production deploy $(date)\" && git push origin main && wrangler deploy --env production",
     "build": "echo 'No build step required'",
     "upload": "node upload-files.js",
