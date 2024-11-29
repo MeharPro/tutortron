@@ -464,6 +464,25 @@ router.get('/api/env', async (request, env) => {
   });
 });
 
+// Handle CORS preflight requests
+router.options('*', () => new Response(null, { headers: corsHeaders }));
+
+// Special route for pros-only-teachers
+router.get('/pros-only-teachers', async (request, env) => {
+  console.log('Handling pros-only-teachers request');
+  const file = await env.FILES.get('pros-only-teachers.html');
+  if (!file) {
+    console.log('pros-only-teachers.html not found');
+    return new Response('Not Found', { status: 404 });
+  }
+  return new Response(file, {
+    headers: {
+      'Content-Type': 'text/html',
+      'Cache-Control': 'public, max-age=3600'
+    }
+  });
+});
+
 // Handle tutor mode routes
 router.get('/:mode/:linkId', async (request, env) => {
   try {
@@ -543,10 +562,7 @@ router.get('/:mode/:linkId', async (request, env) => {
   }
 });
 
-// Handle CORS preflight requests
-router.options('*', () => new Response(null, { headers: corsHeaders }));
-
-// Handle all routes
+// Handle all other routes
 router.all('*', async (request, env) => {
   const url = new URL(request.url);
   console.log('Incoming request URL:', request.url);
