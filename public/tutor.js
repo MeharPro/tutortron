@@ -455,7 +455,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             const reader = new FileReader();
             reader.onload = function(e) {
                 currentImage = e.target.result.split(',')[1];
-                imageButton.style.backgroundColor = '#4F46E5';
+                imageButton.style.backgroundColor = '#22c55e';
+                imageButton.style.color = '#ffffff';
                 imageButton.textContent = 'Image Added';
             };
             reader.readAsDataURL(file);
@@ -483,7 +484,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
-    document.getElementById('copyButton').addEventListener('click', () => {
+    document.getElementById('copyButton').addEventListener('click', async () => {
         const messages = Array.from(chatContainer.children).map(msg => {
             const role = msg.classList.contains('user-message') ? 'You' : 'Tutor';
             return `${role}: ${msg.textContent}`;
@@ -491,20 +492,56 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         const chatText = messages.join('\n\n');
         
-        navigator.clipboard.writeText(chatText).then(() => {
-            const notification = document.createElement('div');
-            notification.className = 'copy-notification';
-            notification.textContent = 'Chat copied to clipboard!';
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.remove();
-            }, 2000);
-        }).catch(err => {
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(chatText);
+                showCopyNotification('Chat copied to clipboard!');
+            } else {
+                const textArea = document.createElement('textarea');
+                textArea.value = chatText;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
+                try {
+                    document.execCommand('copy');
+                    textArea.remove();
+                    showCopyNotification('Chat copied to clipboard!');
+                } catch (err) {
+                    console.error('Fallback copy failed:', err);
+                    textArea.remove();
+                    throw new Error('Copy failed');
+                }
+            }
+        } catch (err) {
             console.error('Failed to copy:', err);
             showError('Failed to copy chat to clipboard');
-        });
+        }
     });
+
+    function showCopyNotification(message) {
+        const notification = document.createElement('div');
+        notification.className = 'copy-notification';
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        notification.style.position = 'fixed';
+        notification.style.bottom = '20px';
+        notification.style.left = '50%';
+        notification.style.transform = 'translateX(-50%)';
+        notification.style.backgroundColor = '#22c55e';
+        notification.style.color = 'white';
+        notification.style.padding = '12px 24px';
+        notification.style.borderRadius = '6px';
+        notification.style.zIndex = '1000';
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 2000);
+    }
 
     // Initialize tutor
     try {
