@@ -292,32 +292,46 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         .hljs {
             background: #1e1e1e;
-            color: #d4d4d4;
+            color: #808080;  /* Default grey color for regular text */
         }
-        /* Syntax colors */
+        /* Special text colors */
         .hljs-keyword {
-            color: #569cd6;  /* blue for keywords like int, for, if */
+            color: #569cd6;  /* blue for keywords like while, for, if */
         }
-        .hljs-built_in {
-            color: #4ec9b0;  /* teal for built-in types */
-        }
-        .hljs-number {
-            color: #b5cea8;  /* light green for numbers */
-        }
-        .hljs-comment {
-            color: #6a9955;  /* green for comments */
+        .hljs-title {
+            color: #4ec9b0;  /* teal for titles/functions */
         }
         .hljs-string {
             color: #ce9178;  /* orange for strings */
         }
+        .hljs-comment {
+            color: #6a9955;  /* green for comments */
+        }
+        .hljs-literal {
+            color: #569cd6;  /* blue for true/false */
+        }
+        .hljs-built_in {
+            color: #4ec9b0;  /* teal for built-in functions */
+        }
+        .hljs-params {
+            color: #9cdcfe;  /* light blue for parameters */
+        }
+        .hljs-number {
+            color: #b5cea8;  /* light green for numbers */
+        }
         .hljs-operator {
             color: #d4d4d4;  /* white for operators */
         }
-        .hljs-function {
-            color: #dcdcaa;  /* yellow for functions */
+        /* Additional styles for markdown-like syntax */
+        .hljs-section {
+            color: #808080;  /* grey for markdown sections */
         }
-        .hljs-variable {
-            color: #9cdcfe;  /* light blue for variables */
+        .hljs-emphasis {
+            color: #6a9955;  /* green for emphasized text */
+            font-style: italic;
+        }
+        .hljs-strong {
+            color: #569cd6;  /* blue for strong text */
         }
     `;
     document.head.appendChild(codeStyle);
