@@ -338,7 +338,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             justify-content: center;
             width: 16px;
             height: 16px;
-            border-radius: 50%;
+            border-radius: 100%;
             background-color: #333;
             color: white;
             font-family: serif;
