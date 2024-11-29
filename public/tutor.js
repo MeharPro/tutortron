@@ -218,7 +218,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             try {
                 if (currentImage) {
                     console.log("Processing image request with vision model:", VISION_MODEL);
-                    // If image is present, use vision model
+                    console.log("Image data length:", currentImage.length);
+                    
                     const visionMessages = [
                         { 
                             role: "system", 
@@ -241,6 +242,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                         }
                     ];
 
+                    console.log("Vision request payload:", JSON.stringify({
+                        model: VISION_MODEL,
+                        messages: visionMessages,
+                        max_tokens: 1024,
+                        temperature: 0.7,
+                        top_p: 0.9,
+                        stream: false
+                    }, null, 2));
+
                     console.log("Sending request to vision model...");
                     try {
                         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -262,15 +272,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                         });
 
                         if (!response.ok) {
-                            console.error("Vision model response not OK:", await response.text());
-                            throw new Error('Vision model failed');
+                            const errorText = await response.text();
+                            console.error("Vision model response not OK:", errorText);
+                            throw new Error(`Vision model failed: ${errorText}`);
                         }
 
                         const data = await response.json();
-                        console.log("Vision model response:", data);
+                        console.log("Vision model full response:", JSON.stringify(data, null, 2));
                         
                         if (!data.choices?.[0]?.message?.content?.trim()) {
-                            console.error("Empty or invalid response from vision model");
+                            console.error("Empty or invalid response from vision model. Full response:", JSON.stringify(data, null, 2));
                             throw new Error('Empty response from vision model');
                         }
 
@@ -535,6 +546,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             const reader = new FileReader();
             reader.onload = function(e) {
                 currentImage = e.target.result.split(',')[1]; // Get base64 part
+                console.log("Base64 image data (first 100 chars):", currentImage.substring(0, 100) + "...");
+                console.log("Base64 image length:", currentImage.length);
                 imageButton.style.backgroundColor = '#4F46E5';
                 imageButton.textContent = 'Image Added';
             };
