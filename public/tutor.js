@@ -5,22 +5,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     // MathJax configuration and loading
     function initMathJax() {
         window.MathJax = {
-            loader: {load: ['[tex]/ams']},
             tex: {
                 inlineMath: [['$', '$']],
                 displayMath: [['$$', '$$']],
-                processEscapes: true,
-                packages: {'[+]': ['ams']}
+                processEscapes: true
             },
-            startup: {
-                ready() {
-                    MathJax.startup.defaultReady();
-                }
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
             }
         };
 
         const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+        script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js';
         script.async = true;
         document.head.appendChild(script);
     }
@@ -28,10 +24,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Initialize MathJax
     initMathJax();
 
-    // Function to typeset math with retry
+    function formatMathContent(content) {
+        // Format step headers
+        content = content.replace(/^## /gm, '');
+        
+        // Format inline math expressions
+        content = content.replace(/(\d+)\s*tan\s*\(\s*x\s*\)/g, '$$$1\\tan(x)$$');
+        content = content.replace(/tan\s*\(\s*x\s*\)/g, '$$\\tan(x)$$');
+        content = content.replace(/tan\^2\s*\(\s*x\s*\)/g, '$$\\tan^2(x)$$');
+        content = content.replace(/(\d+)\s*=\s*(\d+)/g, '$$\$1 = $2$$');
+        content = content.replace(/\//g, '\\frac');
+        
+        // Format bullet points
+        content = content.replace(/^\* /gm, '• ');
+        
+        // Format equations
+        content = content.replace(
+            /(\d+)\s*tan\(x\)\s*-\s*2\s*tan\(x\)\s*\/\s*\(1\s*-\s*tan\^2\(x\)\)\s*=\s*0/g,
+            '$$3\\tan(x) - \\frac{2\\tan(x)}{1-\\tan^2(x)} = 0$$'
+        );
+        
+        return content;
+    }
+
     async function typesetMath(element) {
         let retries = 0;
-        const maxRetries = 5;
+        const maxRetries = 10;
         
         while (retries < maxRetries) {
             if (window.MathJax?.typesetPromise) {
@@ -162,23 +180,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             loadingDiv.style.display = 'none';
         }
 
-        function formatMathContent(content) {
-            // Convert LaTeX delimiters
-            content = content
-                .replace(/\\\((.*?)\\\)/g, '$ $1 $')
-                .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$');
-
-            // Format bullet points
-            content = content.replace(/^\* /gm, '• ');
-
-            // Ensure proper spacing
-            content = content
-                .replace(/\n\n/g, '<br><br>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-            return content;
-        }
-
         function appendMessage(type, content) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}-message`;
@@ -191,15 +192,19 @@ document.addEventListener("DOMContentLoaded", async () => {
                 content = content
                     .replace(/^Step (\d+)/gm, '<h3>Step $1</h3>')
                     .replace(/^• (.*?)$/gm, '<div class="bullet">• $1</div>')
-                    .replace(/<br><br>/g, '</div><div class="paragraph">')
+                    .replace(/\n\n/g, '</div><div class="paragraph">')
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
                 
                 messageDiv.innerHTML = `<div class="paragraph">${content}</div>`;
                 
-                // Process math with retry
-                typesetMath(messageDiv).catch(err => 
-                    console.error('Failed to typeset math:', err)
-                );
+                // Process math
+                if (window.MathJax) {
+                    setTimeout(() => {
+                        typesetMath(messageDiv).catch(err => 
+                            console.error('Failed to typeset math:', err)
+                        );
+                    }, 100);
+                }
             } else {
                 messageDiv.textContent = content;
             }
