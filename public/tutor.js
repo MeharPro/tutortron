@@ -213,6 +213,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             try {
                 if (currentImage) {
+                    console.log("Processing image request...");
                     // If image is present, use vision model
                     const visionMessages = [
                         { 
@@ -236,22 +237,37 @@ document.addEventListener("DOMContentLoaded", async () => {
                         }
                     ];
 
+                    console.log("Sending request to vision model...");
                     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                         method: "POST",
                         headers: {
                             Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
                             "Content-Type": "application/json",
+                            "HTTP-Referer": window.location.origin,
+                            "X-Title": "Tutor-Tron"
                         },
                         body: JSON.stringify({
                             model: "meta-llama/llama-3.2-90b-vision-instruct:free",
-                            messages: visionMessages
+                            messages: visionMessages,
+                            max_tokens: 1024
                         })
                     });
 
-                    if (!response.ok) throw new Error('Vision model failed');
+                    if (!response.ok) {
+                        console.error("Vision model response not OK:", await response.text());
+                        throw new Error('Vision model failed');
+                    }
 
                     const data = await response.json();
+                    console.log("Vision model response:", data);
+                    
+                    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+                        console.error("Unexpected response format:", data);
+                        throw new Error('Invalid response format from vision model');
+                    }
+
                     const aiMessage = data.choices[0].message.content;
+                    console.log("AI Message:", aiMessage);
                     
                     // Add to history - store as text only for future context
                     conversationHistory.push({
@@ -263,8 +279,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                         content: aiMessage 
                     });
                     
+                    // Ensure the message is displayed
                     appendMessage('ai', aiMessage);
-
+                    
                     // Reset image state but keep the conversation history
                     currentImage = null;
                     imageButton.style.backgroundColor = '';
