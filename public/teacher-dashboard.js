@@ -326,14 +326,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelectorAll('.mode-tab').forEach(tab => {
         const mode = tab.dataset.mode;
         const infoIcon = document.createElement('span');
-        infoIcon.innerHTML = ' ℹ️';
+        infoIcon.innerHTML = 'i';
         infoIcon.className = 'info-icon';
         infoIcon.style.cssText = `
             cursor: pointer;
             position: relative;
-            margin-left: 5px;
-            font-size: 14px;
+            margin-left: 8px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: #333;
+            color: white;
+            font-family: serif;
+            font-style: italic;
+            font-weight: bold;
+            line-height: 1;
+            transition: all 0.2s ease;
         `;
+
+        // Add hover effect
+        infoIcon.addEventListener('mouseenter', () => {
+            infoIcon.style.backgroundColor = '#666';
+        });
+
+        infoIcon.addEventListener('mouseleave', () => {
+            infoIcon.style.backgroundColor = '#333';
+        });
 
         // Create tooltip
         const tooltip = document.createElement('div');
