@@ -10,7 +10,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
     
     const models = [
-        VISION_MODEL,  // Add vision model as first priority
         "google/learnlm-1.5-pro-experimental:free",
         "openchat/openchat-7b:free",
         "liquid/lfm-40b:free",
@@ -20,321 +19,207 @@ document.addEventListener("DOMContentLoaded", async () => {
         "qwen/qwen-2-7b-instruct:free"
     ];
 
-    const chatContainer = document.getElementById('chatContainer');
-    const messageInput = document.getElementById('messageInput');
-    const sendButton = document.getElementById('sendMessage');
-    const loadingDiv = document.getElementById('loading');
-    
-    const conversationHistory = [];
-    let isSpeaking = false;
-    let currentSpeech = null;
-    
-    let consoleErrors = [];
-    let isProcessing = false;  // Flag to prevent multiple simultaneous requests
-
-    // Override console.error to capture errors
-    const originalConsoleError = console.error;
-    console.error = function() {
-        consoleErrors.push(Array.from(arguments).join(' '));
-        originalConsoleError.apply(console, arguments);
-        updateErrorButton();
+    // MathJax configuration
+    window.MathJax = {
+        tex: {
+            inlineMath: [['$', '$']],
+            displayMath: [['$$', '$$']],
+            processEscapes: true
+        },
+        options: {
+            skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+        }
     };
 
-    // Function to update error button visibility
-    function updateErrorButton() {
-        const button = document.getElementById('floatingErrorButton');
-        if (consoleErrors.length > 0) {
-            button.classList.add('has-errors');
-        } else {
-            button.classList.remove('has-errors');
-        }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js';
+    script.async = true;
+    document.head.appendChild(script);
+
+    // Function to format math content
+    function formatMathContent(content) {
+        // Format step headers
+        content = content.replace(/^## /gm, '');
+        
+        // Format inline math expressions
+        content = content.replace(/(\d+)\s*tan\s*\(\s*x\s*\)/g, '$$$1\\tan(x)$$');
+        content = content.replace(/tan\s*\(\s*x\s*\)/g, '$$\\tan(x)$$');
+        content = content.replace(/tan\^2\s*\(\s*x\s*\)/g, '$$\\tan^2(x)$$');
+        
+        // Format bullet points
+        content = content.replace(/^\* /gm, '• ');
+        
+        return content;
     }
 
-    try {
-        const response = await fetch(`/api/tutor/${linkId}`);
-        if (!response.ok) {
-            window.location.href = '/invalid-link.html';
-            return;
-        }
+    async function typesetMath(element) {
+        let retries = 0;
+        const maxRetries = 10;
         
-        const tutorConfig = await response.json();
-        document.getElementById('subjectTitle').textContent = tutorConfig.subject;
-        
-        // Use the mode-specific system prompt
-        const systemMessage = `You are an AI teacher named "Tutor-Tron". ${tutorConfig.prompt}`;
-        conversationHistory.push({ role: "system", content: systemMessage });
-        
-        // Execute the initial prompt
-        try {
-            loadingDiv.style.display = 'block';
-            let currentModelIndex = 0;
-            let success = false;
-
-            while (currentModelIndex < models.length && !success) {
+        while (retries < maxRetries) {
+            if (window.MathJax?.typesetPromise) {
                 try {
-                    console.log(`Trying model: ${models[currentModelIndex]}`);
-                    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                        method: "POST",
-                        headers: {
-                            Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                            model: models[currentModelIndex],
-                            messages: [
-                                { role: "system", content: systemMessage },
-                                { role: "user", content: tutorConfig.prompt }
-                            ],
-                        }),
-                    });
-
-                    if (!response.ok) {
-                        console.log(`Model ${models[currentModelIndex]} failed, trying next...`);
-                        currentModelIndex++;
-                        continue;
-                    }
-
-                    const data = await response.json();
-                    const aiMessage = data.choices[0].message.content;
-                    conversationHistory.push({ role: "assistant", content: aiMessage });
-                    appendMessage('ai', aiMessage);
-                    success = true;
-
+                    await window.MathJax.typesetPromise([element]);
+                    return;
                 } catch (error) {
-                    console.log(`Error with model ${models[currentModelIndex]}, trying next...`);
-                    currentModelIndex++;
+                    console.error('MathJax typesetting error:', error);
                 }
             }
-
-            if (!success) {
-                throw new Error('All models failed');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            appendMessage('error', 'Failed to initialize Tutor-Tron. Please try refreshing the page.');
-        } finally {
-            loadingDiv.style.display = 'none';
+            await new Promise(resolve => setTimeout(resolve, 500));
+            retries++;
         }
-
-        // MathJax configuration and loading
-        function initMathJax() {
-            window.MathJax = {
-                tex: {
-                    inlineMath: [['$', '$']],
-                    displayMath: [['$$', '$$']],
-                    processEscapes: true
-                },
-                options: {
-                    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
-                }
-            };
-
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js';
-            script.async = true;
-            document.head.appendChild(script);
-        }
-
-        // Initialize MathJax
-        initMathJax();
-
-        // Rest of your code...
-        const pathParts = window.location.pathname.split('/');
-        // ... rest of existing code ...
-
-        // Remove this line that was causing the error
-        // initMathJax().catch(err => console.error('Failed to load MathJax:', err));
-    } catch (error) {
-        window.location.href = '/invalid-link.html';
-        return;
     }
 
-    // Add this after your existing event listeners
-    document.getElementById('copyButton').addEventListener('click', () => {
-        // Get all messages
-        const messages = Array.from(chatContainer.children).map(msg => {
-            const role = msg.classList.contains('user-message') ? 'You' : 'Tutor';
-            return `${role}: ${msg.textContent}`;
-        });
-
-        // Format the chat history
-        const chatText = messages.join('\n\n');
+    function appendMessage(type, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}-message`;
         
-        // Copy to clipboard
-        navigator.clipboard.writeText(chatText).then(() => {
-            // Show notification
-            const notification = document.createElement('div');
-            notification.className = 'copy-notification';
-            notification.textContent = 'Chat copied to clipboard!';
-            document.body.appendChild(notification);
+        if (type === 'ai') {
+            content = formatMathContent(content);
             
-            // Show and animate the notification
-            notification.style.display = 'block';
+            content = content
+                .replace(/^Step (\d+)/gm, '<h3>Step $1</h3>')
+                .replace(/^• (.*?)$/gm, '<div class="bullet">• $1</div>')
+                .replace(/\n\n/g, '</div><div class="paragraph">')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             
-            // Remove notification after animation
-            setTimeout(() => {
-                notification.remove();
-            }, 2000);
-        }).catch(err => {
-            console.error('Failed to copy:', err);
-            showError('Failed to copy chat to clipboard');
-        });
-    });
-
-    // Replace the speak function with this:
-    async function speak(text) {
-        const DEEPGRAM_URL = "https://api.deepgram.com/v1/speak?model=aura-arcas-en";
-        const DEEPGRAM_API_KEY = window.env.DEEPGRAM_API_KEY;
-
-        console.log('Using Deepgram API Key:', DEEPGRAM_API_KEY); // Debug log
-
-        const payload = {
-            text: text
-        };
-
-        try {
-            const response = await fetch(DEEPGRAM_URL, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Token ${DEEPGRAM_API_KEY}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.text();
-                console.error('Text-to-speech request failed:', errorData);
-                throw new Error('Failed to convert text to speech');
+            messageDiv.innerHTML = `<div class="paragraph">${content}</div>`;
+            
+            if (window.MathJax) {
+                setTimeout(() => {
+                    typesetMath(messageDiv).catch(err => 
+                        console.error('Failed to typeset math:', err)
+                    );
+                }, 100);
             }
-
-            const audioBlob = await response.blob();
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const audio = new Audio(audioUrl);
-            currentSpeech = audio;
-            
-            audio.onended = () => {
-                isSpeaking = false;
-                updateSpeakButton();
-                currentSpeech = null;
-            };
-
-            audio.play();
-        } catch (error) {
-            console.error('Error during text-to-speech request:', error);
-            isSpeaking = false;
-            updateSpeakButton();
+        } else {
+            messageDiv.textContent = content;
         }
+        
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
-    // Update the speakButton click handler
-    document.getElementById('speakButton').addEventListener('click', () => {
-        if (isSpeaking) {
-            // Stop speaking
-            if (currentSpeech) {
-                currentSpeech.pause();
-                currentSpeech = null;
-            }
-            isSpeaking = false;
-            updateSpeakButton();
-        } else {
-            // Start speaking - get the last AI message
-            const aiMessages = Array.from(chatContainer.children)
-                .filter(msg => msg.classList.contains('ai-message'));
-            
-            if (aiMessages.length > 0) {
-                const lastMessage = aiMessages[aiMessages.length - 1].textContent;
-                isSpeaking = true;
-                updateSpeakButton();
-                speak(lastMessage);
-            }
-        }
-    });
+    // Handle sending messages
+    async function sendMessage() {
+        const message = messageInput.value.trim();
+        if (!message) return;
 
-    // Add this function
-    function updateSpeakButton() {
-        const speakButton = document.getElementById('speakButton');
-        if (isSpeaking) {
-            speakButton.textContent = '🔇 Stop Speaking';
-            speakButton.style.backgroundColor = '#dc2626';
-        } else {
-            speakButton.textContent = ' Speak Response';
-            speakButton.style.backgroundColor = '#4b5563';
-        }
-    }
+        appendMessage('user', message);
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
 
-    // Add this right after getting the mode
-    document.body.classList.add(mode); // Add this line to set the background color
-    document.getElementById('modeTitle').textContent = 
-        `${mode.charAt(0).toUpperCase() + mode.slice(1)} - Tutor-Tron`;
-
-    // Add this function to handle error reporting
-    async function reportError(error) {
         try {
-            const timestamp = new Date().toISOString();
-            const errorReport = `[${timestamp}] Error: ${error}\n`;
-            
-            const response = await fetch('/api/report-error', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ error: errorReport })
-            });
+            if (currentImage) {
+                console.log("Processing image request with vision model:", VISION_MODEL);
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        model: VISION_MODEL,
+                        messages: [
+                            {
+                                role: "user",
+                                content: [
+                                    {
+                                        type: "text",
+                                        text: message
+                                    },
+                                    {
+                                        type: "image_url",
+                                        image_url: {
+                                            url: `data:image/jpeg;base64,${currentImage}`
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    })
+                });
 
-            if (response.ok) {
-                alert('Error reported successfully. Thank you!');
+                if (!response.ok) {
+                    throw new Error('Vision model failed');
+                }
+
+                const data = await response.json();
+                console.log("Vision model response:", data);
+
+                if (!data.choices?.[0]?.message?.content) {
+                    throw new Error('Empty response from vision model');
+                }
+
+                const aiMessage = data.choices[0].message.content;
+                conversationHistory.push({
+                    role: "user",
+                    content: `[Image uploaded] ${message}`
+                });
+                conversationHistory.push({
+                    role: "assistant",
+                    content: aiMessage
+                });
+                
+                appendMessage('ai', aiMessage);
+
+                // Reset image state
+                currentImage = null;
+                imageButton.style.backgroundColor = '';
+                imageButton.textContent = 'Add Image';
+                imageInput.value = '';
             } else {
-                alert('Failed to report error. Please try again.');
+                // No image - use regular models with retry logic
+                let success = false;
+                let retries = 0;
+                
+                conversationHistory.push({
+                    role: "user",
+                    content: message
+                });
+
+                while (!success && retries < models.length) {
+                    try {
+                        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                            method: "POST",
+                            headers: {
+                                Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                                model: models[retries],
+                                messages: conversationHistory
+                            }),
+                        });
+
+                        if (!response.ok) throw new Error('Model failed');
+
+                        const data = await response.json();
+                        const aiMessage = data.choices[0].message.content;
+                        conversationHistory.push({ role: "assistant", content: aiMessage });
+                        appendMessage('ai', aiMessage);
+                        success = true;
+                    } catch (error) {
+                        console.error(`Error with model ${models[retries]}:`, error);
+                        retries++;
+                    }
+                }
+
+                if (!success) {
+                    throw new Error('All models failed');
+                }
             }
-        } catch (err) {
-            console.error('Error reporting failed:', err);
-            alert('Failed to report error. Please try again.');
+        } catch (error) {
+            console.error("Error:", error);
+            appendMessage('error', 'Failed to get response. Please try again.');
         }
     }
 
-    // Update error display to include report button
-    function showError(message) {
-        const errorContainer = document.getElementById('errorContainer');
-        const errorMessage = errorContainer.querySelector('.error-message');
-        errorMessage.textContent = message;
-        errorContainer.style.display = 'block';
-
-        // Add click handler for report button
-        document.getElementById('reportError').onclick = () => reportError(message);
-    }
-
-    // Add right after the message input declarations (around line 22)
-    const imageInput = document.createElement('input');
-    imageInput.type = 'file';
-    imageInput.accept = 'image/*';
-    imageInput.style.display = 'none';
-
-    const imageButton = document.createElement('button');
-    imageButton.textContent = 'Add Image';
-    imageButton.className = 'image-button';
-    messageInput.parentNode.insertBefore(imageButton, sendButton);
-    messageInput.parentNode.insertBefore(imageInput, sendButton);
-
-    let currentImage = null;
-
-    imageButton.addEventListener('click', () => imageInput.click());
-
-    imageInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                currentImage = e.target.result.split(',')[1]; // Get base64 part
-                imageButton.style.backgroundColor = '#4F46E5';
-                imageButton.textContent = 'Image Added';
-            };
-            reader.readAsDataURL(file);
+    sendButton.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
         }
     });
-
-    // Load MathJax at startup
-    loadMathJax().catch(err => 
-        console.error('Failed to load MathJax:', err)
-    );
 }); 
