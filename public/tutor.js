@@ -218,8 +218,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             try {
                 if (currentImage) {
                     console.log("Processing image request with vision model:", VISION_MODEL);
-                    console.log("Image data length:", currentImage.length);
                     
+                    // Construct the vision message
                     const visionMessages = [
                         { 
                             role: "system", 
@@ -231,7 +231,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                                 {
                                     type: "image_url",
                                     image_url: {
-                                        url: `data:image/jpeg;base64,${currentImage}`
+                                        url: `data:image/jpeg;base64,${currentImage}`,
+                                        detail: "low"
                                     }
                                 },
                                 {
@@ -242,17 +243,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                         }
                     ];
 
-                    console.log("Vision request payload:", JSON.stringify({
-                        model: VISION_MODEL,
-                        messages: visionMessages,
-                        max_tokens: 1024,
-                        temperature: 0.7,
-                        top_p: 0.9,
-                        stream: false
-                    }, null, 2));
-
-                    console.log("Sending request to vision model...");
                     try {
+                        console.log("Sending request to vision model...");
                         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                             method: "POST",
                             headers: {
@@ -267,54 +259,58 @@ document.addEventListener("DOMContentLoaded", async () => {
                                 max_tokens: 1024,
                                 temperature: 0.7,
                                 top_p: 0.9,
-                                stream: false
+                                stream: false,
+                                seed: Math.floor(Math.random() * 1000000)
                             })
                         });
 
+                        const responseText = await response.text();
+                        console.log("Raw response:", responseText);
+
                         if (!response.ok) {
-                            const errorText = await response.text();
-                            console.error("Vision model response not OK:", errorText);
-                            throw new Error(`Vision model failed: ${errorText}`);
+                            console.error("Vision model error:", responseText);
+                            throw new Error(`Vision model failed: ${responseText}`);
                         }
 
-                        const data = await response.json();
+                        const data = JSON.parse(responseText);
                         console.log("Vision model full response:", JSON.stringify(data, null, 2));
+
+                        // Check for error in choices
+                        if (data.choices?.[0]?.error) {
+                            console.error("Model returned error:", data.choices[0].error);
+                            throw new Error(`Model error: ${data.choices[0].error.message}`);
+                        }
                         
                         if (!data.choices?.[0]?.message?.content?.trim()) {
-                            console.error("Empty or invalid response from vision model. Full response:", JSON.stringify(data, null, 2));
+                            console.error("Empty response from vision model");
                             throw new Error('Empty response from vision model');
                         }
 
                         const aiMessage = data.choices[0].message.content.trim();
                         console.log("AI Message:", aiMessage);
                         
-                        if (aiMessage) {
-                            // Add to history - store as text only for future context
-                            conversationHistory.push({
-                                role: "user",
-                                content: `[Image uploaded] ${message}`
-                            });
-                            conversationHistory.push({ 
-                                role: "assistant", 
-                                content: aiMessage 
-                            });
-                            
-                            // Ensure the message is displayed
-                            appendMessage('ai', aiMessage);
-                        } else {
-                            throw new Error('Empty response from vision model');
-                        }
+                        // Add to history and display
+                        conversationHistory.push({
+                            role: "user",
+                            content: `[Image uploaded] ${message}`
+                        });
+                        conversationHistory.push({ 
+                            role: "assistant", 
+                            content: aiMessage 
+                        });
+                        
+                        appendMessage('ai', aiMessage);
                         
                     } catch (error) {
                         console.error("Vision model error:", error);
-                        appendMessage('error', 'Failed to process image. Please try again.');
+                        appendMessage('error', `Failed to process image: ${error.message}`);
                     }
 
-                    // Reset image state but keep the conversation history
+                    // Reset image state
                     currentImage = null;
                     imageButton.style.backgroundColor = '';
                     imageButton.textContent = 'Add Image';
-                    imageInput.value = ''; // Clear the file input
+                    imageInput.value = '';
                     
                 } else {
                     // No image - use regular models with retry logic
@@ -543,11 +539,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     imageInput.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file) {
+            if (file.size > 1024 * 1024 * 2) { // 2MB limit
+                alert('Image is too large. Please use an image under 2MB.');
+                return;
+            }
             const reader = new FileReader();
             reader.onload = function(e) {
-                currentImage = e.target.result.split(',')[1]; // Get base64 part
-                console.log("Base64 image data (first 100 chars):", currentImage.substring(0, 100) + "...");
-                console.log("Base64 image length:", currentImage.length);
+                const base64Full = e.target.result;
+                currentImage = base64Full.split(',')[1]; // Get base64 part
+                console.log("Image format:", file.type);
+                console.log("Image size:", file.size);
+                console.log("Base64 length:", currentImage.length);
                 imageButton.style.backgroundColor = '#4F46E5';
                 imageButton.textContent = 'Image Added';
             };
