@@ -439,4 +439,104 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Add click handler for report button
         document.getElementById('reportError').onclick = () => reportError(message);
     }
+
+    // Add right after the message input declarations (around line 22)
+    const imageInput = document.createElement('input');
+    imageInput.type = 'file';
+    imageInput.accept = 'image/*';
+    imageInput.style.display = 'none';
+
+    const imageButton = document.createElement('button');
+    imageButton.textContent = 'Add Image';
+    imageButton.className = 'image-button';
+    messageInput.parentNode.insertBefore(imageButton, sendButton);
+    messageInput.parentNode.insertBefore(imageInput, sendButton);
+
+    let currentImage = null;
+
+    imageButton.addEventListener('click', () => imageInput.click());
+
+    imageInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentImage = e.target.result.split(',')[1]; // Get base64 part
+                imageButton.style.backgroundColor = '#4F46E5';
+                imageButton.textContent = 'Image Added';
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Modify the existing sendMessage function's while loop
+    while (!success && retries < models.length) {
+        if (currentImage) {
+            // Use vision model for image
+            try {
+                const visionMessage = {
+                    role: "user",
+                    content: [
+                        {
+                            type: "text",
+                            text: message
+                        },
+                        {
+                            type: "image_url",
+                            image_url: {
+                                url: `data:image/jpeg;base64,${currentImage}`
+                            }
+                        }
+                    ]
+                };
+
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        model: "meta-llama/llama-3.2-90b-vision-instruct:free",
+                        messages: [...conversationHistory.slice(0, -1), visionMessage]
+                    }),
+                });
+
+                if (!response.ok) throw new Error('Vision model failed');
+
+                const data = await response.json();
+                const aiMessage = data.choices[0].message.content;
+                conversationHistory.push(visionMessage);
+                conversationHistory.push({ role: "assistant", content: aiMessage });
+                appendMessage('ai', aiMessage);
+                currentImage = null;
+                imageButton.style.backgroundColor = '';
+                imageButton.textContent = 'Add Image';
+                success = true;
+            } catch (error) {
+                console.error('Vision model failed:', error);
+                success = false;
+                break; // Don't retry with other models if vision fails
+            }
+        } else {
+            // Use regular models (existing code)
+            try {
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        model: models[retries],
+                        messages: conversationHistory
+                    }),
+                });
+                // ... rest of the existing code for regular models ...
+            } catch (error) {
+                console.error(`Error with model ${models[retries]}:`, error);
+                retries++;
+            }
+        }
+    }
 }); 

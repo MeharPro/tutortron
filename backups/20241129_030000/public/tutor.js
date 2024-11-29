@@ -7,12 +7,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const linkId = pathParts[pathParts.length - 1];
     const models = [
         "google/learnlm-1.5-pro-experimental:free",
-        "meta-llama/llama-3.1-405b-instruct:free",
+        "openchat/openchat-7b:free",
         "liquid/lfm-40b:free",
-        "google/gemini-exp-1114",
-        "meta-llama/llama-3.1-70b-instruct:free",
+        "google/gemini-exp-1121:free",
         "google/gemma-2-9b-it:free",
         "liquid/lfm-40b:free",
+        "meta-llama/llama-3.1-405b-instruct:free",
         "qwen/qwen-2-7b-instruct:free"
     ];
 
