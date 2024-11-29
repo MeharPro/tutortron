@@ -12,10 +12,9 @@ console.log('tutor.js loaded');
             },
             startup: {
                 ready: () => {
+                    console.log('MathJax is ready');
                     MathJax.startup.defaultReady();
-                    MathJax.startup.promise.then(() => {
-                        console.log('MathJax initial typesetting complete');
-                    });
+                    mathJaxReady = true;
                 }
             }
         };
@@ -35,6 +34,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let currentSpeech = null;
     let consoleErrors = [];
     let isProcessing = false;
+    let mathJaxReady = false;
 
     // Error tracking setup
     const originalConsoleError = console.error;
@@ -100,13 +100,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         },
         startup: {
             ready: () => {
+                console.log('MathJax is ready');
                 MathJax.startup.defaultReady();
-                MathJax.startup.promise.then(() => {
-                    console.log('MathJax initial typesetting complete');
-                });
+                mathJaxReady = true;
             }
         }
     };
+
+    // Load MathJax
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js';
+    script.async = true;
+    document.head.appendChild(script);
 
     // Add styling
     const mathStyle = document.createElement('style');
@@ -167,7 +172,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             messageDiv.innerHTML = `<div class="paragraph">${content}</div>`;
             
-            if (window.MathJax) {
+            if (mathJaxReady && window.MathJax?.typesetPromise) {
                 window.MathJax.typesetPromise([messageDiv]).catch(err => 
                     console.error('MathJax error:', err)
                 );
@@ -413,6 +418,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function handleImageMessage(message) {
+        console.log(`Using vision model: ${VISION_MODEL}`);
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -431,9 +437,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             })
         });
 
-        if (!response.ok) throw new Error('Vision model failed');
+        if (!response.ok) {
+            console.error(`Vision model failed with status ${response.status}`);
+            throw new Error('Vision model failed');
+        }
 
         const data = await response.json();
+        console.log("Vision model response received");
+        
         if (!data.choices?.[0]?.message?.content) {
             throw new Error('Empty response from vision model');
         }
@@ -457,6 +468,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         let currentModelIndex = 0;
 
         while (!success && currentModelIndex < models.length) {
+            const currentModel = models[currentModelIndex];
+            console.log(`Attempting to use model: ${currentModel}`);
+            
             try {
                 const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                     method: "POST",
@@ -465,20 +479,25 @@ document.addEventListener("DOMContentLoaded", async () => {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        model: models[currentModelIndex],
+                        model: currentModel,
                         messages: conversationHistory
                     }),
                 });
 
-                if (!response.ok) throw new Error('Model failed');
+                if (!response.ok) {
+                    console.log(`Model ${currentModel} failed with status ${response.status}, trying next...`);
+                    currentModelIndex++;
+                    continue;
+                }
 
                 const data = await response.json();
+                console.log(`Successfully used model: ${currentModel}`);
                 const aiMessage = data.choices[0].message.content;
                 conversationHistory.push({ role: "assistant", content: aiMessage });
                 appendMessage('ai', aiMessage);
                 success = true;
             } catch (error) {
-                console.error(`Error with model ${models[currentModelIndex]}:`, error);
+                console.error(`Error with model ${currentModel}:`, error);
                 currentModelIndex++;
             }
         }
