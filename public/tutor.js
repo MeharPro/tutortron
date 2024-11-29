@@ -21,523 +21,14 @@ console.log('tutor.js loaded');
         };
 document.addEventListener("DOMContentLoaded", async () => {
     await window.envLoaded;
-    function formatMathContent(content) {
-        // Convert LaTeX delimiters
-        content = content
-            .replace(/\\\((.*?)\\\)/g, '$ $1 $')
-            .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$');
-
-        // Format bullet points
-        content = content.replace(/^\* /gm, '• ');
-
-        // Ensure proper spacing
-        content = content
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-        return content;
-    }
-
-    const pathParts = window.location.pathname.split('/');
-    const mode = pathParts[pathParts.length - 2];  // Get mode from URL
-    const linkId = pathParts[pathParts.length - 1];
-
-    // Define vision model constant
-    const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
     
-    const models = [
-        VISION_MODEL,  // Add vision model as first priority
-        "google/learnlm-1.5-pro-experimental:free",
-        "openchat/openchat-7b:free",
-        "liquid/lfm-40b:free",
-        "google/gemini-exp-1121:free",
-        "google/gemma-2-9b-it:free",
-        "meta-llama/llama-3.1-405b-instruct:free",
-        "qwen/qwen-2-7b-instruct:free"
-    ];
-
+    // Get DOM elements
     const chatContainer = document.getElementById('chatContainer');
     const messageInput = document.getElementById('messageInput');
     const sendButton = document.getElementById('sendMessage');
     const loadingDiv = document.getElementById('loading');
     
-    const conversationHistory = [];
-    let isSpeaking = false;
-    let currentSpeech = null;
-    
-    let consoleErrors = [];
-    let isProcessing = false;  // Flag to prevent multiple simultaneous requests
-
-    // Override console.error to capture errors
-    const originalConsoleError = console.error;
-    console.error = function() {
-        consoleErrors.push(Array.from(arguments).join(' '));
-        originalConsoleError.apply(console, arguments);
-        updateErrorButton();
-    };
-
-    // Function to update error button visibility
-    function updateErrorButton() {
-        const button = document.getElementById('floatingErrorButton');
-        if (consoleErrors.length > 0) {
-            button.classList.add('has-errors');
-        } else {
-            button.classList.remove('has-errors');
-        }
-    }
-
-    try {
-        const response = await fetch(`/api/tutor/${linkId}`);
-        if (!response.ok) {
-            window.location.href = '/invalid-link.html';
-            return;
-        }
-        
-        const tutorConfig = await response.json();
-        document.getElementById('subjectTitle').textContent = tutorConfig.subject;
-        
-        // Use the mode-specific system prompt
-        const systemMessage = `You are an AI teacher named "Tutor-Tron". ${tutorConfig.prompt}`;
-        conversationHistory.push({ role: "system", content: systemMessage });
-        
-        // Execute the initial prompt
-        try {
-            loadingDiv.style.display = 'block';
-            let currentModelIndex = 0;
-            let success = false;
-
-            while (currentModelIndex < models.length && !success) {
-                try {
-                    console.log(`Trying model: ${models[currentModelIndex]}`);
-                    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                        method: "POST",
-                        headers: {
-                            Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                            model: models[currentModelIndex],
-                            messages: [
-                                { role: "system", content: systemMessage },
-                                { role: "user", content: tutorConfig.prompt }
-                            ],
-                        }),
-                    });
-
-                    if (!response.ok) {
-                        console.log(`Model ${models[currentModelIndex]} failed, trying next...`);
-                        currentModelIndex++;
-                        continue;
-                    }
-
-                    const data = await response.json();
-                    const aiMessage = data.choices[0].message.content;
-                    conversationHistory.push({ role: "assistant", content: aiMessage });
-                    appendMessage('ai', aiMessage);
-                    success = true;
-
-                } catch (error) {
-                    console.log(`Error with model ${models[currentModelIndex]}, trying next...`);
-                    currentModelIndex++;
-                }
-            }
-
-            if (!success) {
-                throw new Error('All models failed');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            appendMessage('error', 'Failed to initialize Tutor-Tron. Please try refreshing the page.');
-        } finally {
-            loadingDiv.style.display = 'none';
-        }
-
-
-
-        function appendMessage(type, content) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}-message`;
-            
-            if (type === 'ai') {
-                // Format content
-                content = formatMathContent(content);
-                
-                // Convert markdown to HTML
-                content = content
-                    .replace(/^Step (\d+)/gm, '<h3>Step $1</h3>')
-                    .replace(/^• (.*?)$/gm, '<div class="bullet">• $1</div>')
-                    .replace(/<br><br>/g, '</div><div class="paragraph">');
-                
-                messageDiv.innerHTML = `<div class="paragraph">${content}</div>`;
-                
-                // Process math
-                if (window.MathJax) {
-                    window.MathJax.typesetPromise([messageDiv]).catch(err => 
-                        console.error('MathJax error:', err)
-                    );
-                }
-            } else {
-                messageDiv.textContent = content;
-            }
-            
-            chatContainer.appendChild(messageDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        // Add styling
-        const mathStyle = document.createElement('style');
-        mathStyle.textContent = `
-            .message {
-                margin: 10px;
-                padding: 10px;
-                border-radius: 8px;
-                max-width: 80%;
-                font-size: 14px;
-                line-height: 1.5;
-            }
-            .paragraph {
-                margin: 12px 0;
-            }
-            .bullet {
-                margin: 8px 0;
-                padding-left: 8px;
-            }
-            h3 {
-                margin: 16px 0 8px 0;
-                font-size: 15px;
-                font-weight: 600;
-                color: #333;
-            }
-            strong {
-                font-weight: 600;
-                color: #000;
-            }
-            .mjx-chtml {
-                margin: 0 3px !important;
-            }
-        `;
-        document.head.appendChild(mathStyle);
-
-        // Handle sending messages
-        sendButton.addEventListener('click', sendMessage);
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-
-        // Function to try different models
-        async function tryModels(messages, currentModelIndex = 0) {
-            if (currentModelIndex >= models.length) {
-                throw new Error('All models failed');
-            }
-
-            try {
-                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                    method: "POST",
-                    headers: {
-                        Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        model: models[currentModelIndex],
-                        messages: messages,
-                    }),
-                });
-
-                if (!response.ok) {
-                    // If this model fails, try the next one
-                    console.log(`Model ${models[currentModelIndex]} failed, trying next model...`);
-                    return tryModels(messages, currentModelIndex + 1);
-                }
-
-                const data = await response.json();
-                return data.choices[0].message.content;
-            } catch (error) {
-                // If this model errors, try the next one
-                console.log(`Error with model ${models[currentModelIndex]}, trying next model...`);
-                return tryModels(messages, currentModelIndex + 1);
-            }
-        }
-
-        // Modify the sendMessage function
-        async function sendMessage() {
-            const message = messageInput.value.trim();
-            if (!message) return;
-
-            appendMessage('user', message);
-            messageInput.value = '';
-            messageInput.style.height = 'auto';
-
-            try {
-                if (currentImage) {
-                    console.log("Processing image request with vision model:", VISION_MODEL);
-                    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                        method: "POST",
-                        headers: {
-                            Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify({
-                            model: VISION_MODEL,
-                            messages: [
-                                {
-                                    role: "user",
-                                    content: [
-                                        {
-                                            type: "text",
-                                            text: message
-                                        },
-                                        {
-                                            type: "image_url",
-                                            image_url: {
-                                                url: `data:image/jpeg;base64,${currentImage}`
-                                            }
-                                        }
-                                    ]
-                                }
-                            ]
-                        })
-                    });
-
-                    if (!response.ok) {
-                        throw new Error('Vision model failed');
-                    }
-
-                    const data = await response.json();
-                    console.log("Vision model response:", data);
-
-                    if (!data.choices?.[0]?.message?.content) {
-                        throw new Error('Empty response from vision model');
-                    }
-
-                    const aiMessage = data.choices[0].message.content;
-                    conversationHistory.push({
-                        role: "user",
-                        content: `[Image uploaded] ${message}`
-                    });
-                    conversationHistory.push({
-                        role: "assistant",
-                        content: aiMessage
-                    });
-                    
-                    appendMessage('ai', aiMessage);
-
-                    // Reset image state
-                    currentImage = null;
-                    imageButton.style.backgroundColor = '';
-                    imageButton.textContent = 'Add Image';
-                    imageInput.value = '';
-                } else {
-                    // No image - use regular models with retry logic
-                    let success = false;
-                    let retries = 0;
-                    
-                    // Add text-only message to history
-                    conversationHistory.push({
-                        role: "user",
-                        content: message
-                    });
-
-                    while (!success && retries < models.length) {
-                        try {
-                            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                                method: "POST",
-                                headers: {
-                                    Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                                    "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({
-                                    model: models[retries],
-                                    messages: conversationHistory
-                                }),
-                            });
-
-                            if (!response.ok) throw new Error('Model failed');
-
-                            const data = await response.json();
-                            const aiMessage = data.choices[0].message.content;
-                            conversationHistory.push({ role: "assistant", content: aiMessage });
-                            appendMessage('ai', aiMessage);
-                            success = true;
-                        } catch (error) {
-                            console.error(`Error with model ${models[retries]}:`, error);
-                            retries++;
-                        }
-                    }
-
-                    if (!success) {
-                        throw new Error('All models failed');
-                    }
-                }
-            } catch (error) {
-                console.error("Vision model error:", error);
-                appendMessage('error', 'Failed to process image. Please try again.');
-            }
-        }
-
-    } catch (error) {
-        window.location.href = '/invalid-link.html';
-        return;
-    }
-
-    // Add this after your existing event listeners
-    document.getElementById('copyButton').addEventListener('click', () => {
-        // Get all messages
-        const messages = Array.from(chatContainer.children).map(msg => {
-            const role = msg.classList.contains('user-message') ? 'You' : 'Tutor';
-            return `${role}: ${msg.textContent}`;
-        });
-
-        // Format the chat history
-        const chatText = messages.join('\n\n');
-        
-        // Copy to clipboard
-        navigator.clipboard.writeText(chatText).then(() => {
-            // Show notification
-            const notification = document.createElement('div');
-            notification.className = 'copy-notification';
-            notification.textContent = 'Chat copied to clipboard!';
-            document.body.appendChild(notification);
-            
-            // Show and animate the notification
-            notification.style.display = 'block';
-            
-            // Remove notification after animation
-            setTimeout(() => {
-                notification.remove();
-            }, 2000);
-        }).catch(err => {
-            console.error('Failed to copy:', err);
-            showError('Failed to copy chat to clipboard');
-        });
-    });
-
-    // Replace the speak function with this:
-    async function speak(text) {
-        const DEEPGRAM_URL = "https://api.deepgram.com/v1/speak?model=aura-arcas-en";
-        const DEEPGRAM_API_KEY = window.env.DEEPGRAM_API_KEY;
-
-        console.log('Using Deepgram API Key:', DEEPGRAM_API_KEY); // Debug log
-
-        const payload = {
-            text: text
-        };
-
-        try {
-            const response = await fetch(DEEPGRAM_URL, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Token ${DEEPGRAM_API_KEY}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.text();
-                console.error('Text-to-speech request failed:', errorData);
-                throw new Error('Failed to convert text to speech');
-            }
-
-            const audioBlob = await response.blob();
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const audio = new Audio(audioUrl);
-            currentSpeech = audio;
-            
-            audio.onended = () => {
-                isSpeaking = false;
-                updateSpeakButton();
-                currentSpeech = null;
-            };
-
-            audio.play();
-        } catch (error) {
-            console.error('Error during text-to-speech request:', error);
-            isSpeaking = false;
-            updateSpeakButton();
-        }
-    }
-
-    // Update the speakButton click handler
-    document.getElementById('speakButton').addEventListener('click', () => {
-        if (isSpeaking) {
-            // Stop speaking
-            if (currentSpeech) {
-                currentSpeech.pause();
-                currentSpeech = null;
-            }
-            isSpeaking = false;
-            updateSpeakButton();
-        } else {
-            // Start speaking - get the last AI message
-            const aiMessages = Array.from(chatContainer.children)
-                .filter(msg => msg.classList.contains('ai-message'));
-            
-            if (aiMessages.length > 0) {
-                const lastMessage = aiMessages[aiMessages.length - 1].textContent;
-                isSpeaking = true;
-                updateSpeakButton();
-                speak(lastMessage);
-            }
-        }
-    });
-
-    // Add this function
-    function updateSpeakButton() {
-        const speakButton = document.getElementById('speakButton');
-        if (isSpeaking) {
-            speakButton.textContent = '🔇 Stop Speaking';
-            speakButton.style.backgroundColor = '#dc2626';
-        } else {
-            speakButton.textContent = '🔊 Speak Response';
-            speakButton.style.backgroundColor = '#4b5563';
-        }
-    }
-
-    // Add this right after getting the mode
-    document.body.classList.add(mode); // Add this line to set the background color
-    document.getElementById('modeTitle').textContent = 
-        `${mode.charAt(0).toUpperCase() + mode.slice(1)} - Tutor-Tron`;
-
-    // Add this function to handle error reporting
-    async function reportError(error) {
-        try {
-            const timestamp = new Date().toISOString();
-            const errorReport = `[${timestamp}] Error: ${error}\n`;
-            
-            const response = await fetch('/api/report-error', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ error: errorReport })
-            });
-
-            if (response.ok) {
-                alert('Error reported successfully. Thank you!');
-            } else {
-                alert('Failed to report error. Please try again.');
-            }
-        } catch (err) {
-            console.error('Error reporting failed:', err);
-            alert('Failed to report error. Please try again.');
-        }
-    }
-
-    // Update error display to include report button
-    function showError(message) {
-        const errorContainer = document.getElementById('errorContainer');
-        const errorMessage = errorContainer.querySelector('.error-message');
-        errorMessage.textContent = message;
-        errorContainer.style.display = 'block';
-
-        // Add click handler for report button
-        document.getElementById('reportError').onclick = () => reportError(message);
-    }
-
-    // Add right after the message input declarations (around line 22)
+    // Create image input elements
     const imageInput = document.createElement('input');
     imageInput.type = 'file';
     imageInput.accept = 'image/*';
@@ -549,8 +40,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     messageInput.parentNode.insertBefore(imageButton, sendButton);
     messageInput.parentNode.insertBefore(imageInput, sendButton);
 
+    // State variables
+    const conversationHistory = [];
     let currentImage = null;
+    let isSpeaking = false;
+    let currentSpeech = null;
+    let consoleErrors = [];
+    let isProcessing = false;
 
+    // Define models
+    const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
+    const models = [
+        "google/learnlm-1.5-pro-experimental:free",
+        "openchat/openchat-7b:free",
+        "liquid/lfm-40b:free",
+        "google/gemini-exp-1121:free",
+        "google/gemma-2-9b-it:free",
+        "meta-llama/llama-3.1-405b-instruct:free",
+        "qwen/qwen-2-7b-instruct:free"
+    ];
+
+    // Image handling
     imageButton.addEventListener('click', () => imageInput.click());
 
     imageInput.addEventListener('change', function(e) {
@@ -558,11 +68,118 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (file) {
             const reader = new FileReader();
             reader.onload = function(e) {
-                currentImage = e.target.result.split(',')[1]; // Get base64 part
+                currentImage = e.target.result.split(',')[1];
                 imageButton.style.backgroundColor = '#4F46E5';
                 imageButton.textContent = 'Image Added';
             };
             reader.readAsDataURL(file);
         }
     });
+
+    // Message handling
+    async function sendMessage() {
+        if (isProcessing) return;
+        
+        const message = messageInput.value.trim();
+        if (!message) return;
+
+        isProcessing = true;
+        loadingDiv.style.display = 'block';
+        
+        try {
+            appendMessage('user', message);
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            if (currentImage) {
+                await handleImageMessage(message);
+            } else {
+                await handleTextMessage(message);
+            }
+        } catch (error) {
+            console.error("Error:", error);
+            appendMessage('error', 'Failed to get response. Please try again.');
+        } finally {
+            isProcessing = false;
+            loadingDiv.style.display = 'none';
+        }
+    }
+
+    async function handleImageMessage(message) {
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model: VISION_MODEL,
+                messages: [{
+                    role: "user",
+                    content: [
+                        { type: "text", text: message },
+                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${currentImage}` } }
+                    ]
+                }]
+            })
+        });
+
+        if (!response.ok) throw new Error('Vision model failed');
+
+        const data = await response.json();
+        if (!data.choices?.[0]?.message?.content) {
+            throw new Error('Empty response from vision model');
+        }
+
+        const aiMessage = data.choices[0].message.content;
+        conversationHistory.push({ role: "user", content: `[Image uploaded] ${message}` });
+        conversationHistory.push({ role: "assistant", content: aiMessage });
+        appendMessage('ai', aiMessage);
+
+        // Reset image state
+        currentImage = null;
+        imageButton.style.backgroundColor = '';
+        imageButton.textContent = 'Add Image';
+        imageInput.value = '';
+    }
+
+    async function handleTextMessage(message) {
+        conversationHistory.push({ role: "user", content: message });
+        
+        let success = false;
+        let currentModelIndex = 0;
+
+        while (!success && currentModelIndex < models.length) {
+            try {
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        model: models[currentModelIndex],
+                        messages: conversationHistory
+                    }),
+                });
+
+                if (!response.ok) throw new Error('Model failed');
+
+                const data = await response.json();
+                const aiMessage = data.choices[0].message.content;
+                conversationHistory.push({ role: "assistant", content: aiMessage });
+                appendMessage('ai', aiMessage);
+                success = true;
+            } catch (error) {
+                console.error(`Error with model ${models[currentModelIndex]}:`, error);
+                currentModelIndex++;
+            }
+        }
+
+        if (!success) {
+            throw new Error('All models failed');
+        }
+    }
+
+    // Rest of your existing code...
 }); 
