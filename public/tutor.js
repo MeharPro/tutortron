@@ -346,6 +346,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         let currentModelIndex = 0;
 
         while (!success && currentModelIndex < models.length) {
+            const currentModel = models[currentModelIndex];
+            console.log(`Trying model (${currentModelIndex + 1}/${models.length}): ${currentModel}`);
+            
             try {
                 const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                     method: "POST",
@@ -354,7 +357,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        model: models[currentModelIndex],
+                        model: currentModel,
                         messages: [
                             { role: "system", content: systemMessage },
                             { role: "user", content: tutorConfig.prompt }
@@ -363,17 +366,19 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
 
                 if (!response.ok) {
+                    console.log(`Model ${currentModel} failed with status ${response.status}, trying next...`);
                     currentModelIndex++;
                     continue;
                 }
 
                 const data = await response.json();
+                console.log(`Successfully using model: ${currentModel}`);
                 const aiMessage = data.choices[0].message.content;
                 conversationHistory.push({ role: "assistant", content: aiMessage });
                 appendMessage('ai', aiMessage);
                 success = true;
             } catch (error) {
-                console.error(`Error with model ${models[currentModelIndex]}:`, error);
+                console.error(`Error with model ${currentModel}:`, error);
                 currentModelIndex++;
             }
         }
@@ -469,7 +474,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         while (!success && currentModelIndex < models.length) {
             const currentModel = models[currentModelIndex];
-            console.log(`Attempting to use model: ${currentModel}`);
+            console.log(`Trying model (${currentModelIndex + 1}/${models.length}): ${currentModel}`);
             
             try {
                 const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -491,7 +496,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
 
                 const data = await response.json();
-                console.log(`Successfully used model: ${currentModel}`);
+                console.log(`Successfully using model: ${currentModel}`);
                 const aiMessage = data.choices[0].message.content;
                 conversationHistory.push({ role: "assistant", content: aiMessage });
                 appendMessage('ai', aiMessage);
