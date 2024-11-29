@@ -251,13 +251,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         messageDiv.className = `message ${type}-message`;
         
         if (type === 'ai') {
+            // Format code blocks first
             content = formatMathContent(content);
-            content = content
-                .replace(/^Step (\d+)/gm, '<h3>Step $1</h3>')
-                .replace(/^• (.*?)$/gm, '<div class="bullet">• $1</div>')
-                .replace(/<br><br>/g, '</div><div class="paragraph">');
-            
-            messageDiv.innerHTML = `<div class="paragraph">${content}</div>`;
+
+            // Create a wrapper for the content
+            const wrapper = document.createElement('div');
+            wrapper.className = 'message-content';
+
+            // Split content into paragraphs and handle each one
+            const paragraphs = content.split('<br><br>');
+            paragraphs.forEach(paragraph => {
+                if (paragraph.includes('<pre><code')) {
+                    // If it's a code block, add it directly
+                    wrapper.innerHTML += paragraph;
+                } else {
+                    // If it's regular text, wrap in paragraph div
+                    wrapper.innerHTML += `<div class="paragraph">${paragraph}</div>`;
+                }
+            });
+
+            messageDiv.appendChild(wrapper);
             
             // Process MathJax
             if (mathJaxReady && window.MathJax?.typesetPromise) {
@@ -281,21 +294,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Add syntax highlighting styles
     const codeStyle = document.createElement('style');
     codeStyle.textContent = `
+        .message-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .paragraph {
+            margin: 0;
+            line-height: 1.5;
+        }
         pre {
             background-color: #1e1e1e;
             border-radius: 6px;
             padding: 12px;
-            margin: 10px 0;
+            margin: 0;
             overflow-x: auto;
+            width: 100%;
         }
         code {
             font-family: 'Fira Code', monospace;
             font-size: 14px;
             line-height: 1.5;
+            width: 100%;
+            display: inline-block;
         }
         .hljs {
             background: #1e1e1e;
-            color: #808080;  /* Default grey color for regular text */
+            color: #808080;
+            padding: 0;
         }
         /* Special text colors */
         .hljs-keyword {
