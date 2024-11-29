@@ -202,81 +202,100 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         }
 
-        // Update the sendMessage function
+        // Modify the sendMessage function
         async function sendMessage() {
             const message = messageInput.value.trim();
-            if (!message || isProcessing) return;  // Prevent if already processing
+            if (!message) return;
+
+            appendMessage('user', message);
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+            let success = false;
+            let retries = 0;
 
             try {
-                isProcessing = true;  // Set processing flag
+                if (currentImage) {
+                    // If image is present, only use vision model
+                    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                        method: "POST",
+                        headers: {
+                            Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            model: "meta-llama/llama-3.2-90b-vision-instruct:free",
+                            messages: [
+                                ...conversationHistory.slice(0, -1),
+                                {
+                                    role: "user",
+                                    content: [
+                                        {
+                                            type: "text",
+                                            text: message
+                                        },
+                                        {
+                                            type: "image_url",
+                                            image_url: {
+                                                url: `data:image/jpeg;base64,${currentImage}`
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        })
+                    });
 
-                // Stop any ongoing speech immediately
-                if (currentSpeech) {
-                    currentSpeech.pause();
-                    currentSpeech.onended = null;  // Remove end handler
-                    currentSpeech = null;
-                }
-                isSpeaking = false;
-                updateSpeakButton();
+                    if (!response.ok) throw new Error('Vision model failed');
 
-                // Clear input and disable UI
-                messageInput.value = '';
-                messageInput.disabled = true;
-                sendButton.disabled = true;
-                loadingDiv.style.display = 'block';
+                    const data = await response.json();
+                    const aiMessage = data.choices[0].message.content;
+                    
+                    // Add to history
+                    conversationHistory.push({
+                        role: "user",
+                        content: message
+                    });
+                    conversationHistory.push({ role: "assistant", content: aiMessage });
+                    
+                    appendMessage('ai', aiMessage);
 
-                // Display user message
-                appendMessage('user', message);
-                conversationHistory.push({ role: "user", content: message });
+                    // Clear image state
+                    currentImage = null;
+                    imageButton.style.backgroundColor = '';
+                    imageButton.textContent = 'Add Image';
+                    
+                } else {
+                    // No image - use regular models with retry logic
+                    while (!success && retries < models.length) {
+                        try {
+                            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                                method: "POST",
+                                headers: {
+                                    Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                                    "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                    model: models[retries],
+                                    messages: conversationHistory
+                                }),
+                            });
 
-                let currentModelIndex = 0;
-                let success = false;
+                            if (!response.ok) throw new Error('Model failed');
 
-                while (currentModelIndex < models.length && !success) {
-                    try {
-                        console.log(`Trying model: ${models[currentModelIndex]}`);
-                        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                            method: "POST",
-                            headers: {
-                                Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                                "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({
-                                model: models[currentModelIndex],
-                                messages: conversationHistory,
-                            }),
-                        });
-
-                        if (!response.ok) {
-                            console.log(`Model ${models[currentModelIndex]} failed, trying next...`);
-                            currentModelIndex++;
-                            continue;
+                            const data = await response.json();
+                            const aiMessage = data.choices[0].message.content;
+                            conversationHistory.push({ role: "assistant", content: aiMessage });
+                            appendMessage('ai', aiMessage);
+                            success = true;
+                        } catch (error) {
+                            console.error(`Error with model ${models[retries]}:`, error);
+                            retries++;
                         }
-
-                        const data = await response.json();
-                        const aiMessage = data.choices[0].message.content;
-                        conversationHistory.push({ role: "assistant", content: aiMessage });
-                        appendMessage('ai', aiMessage);
-                        success = true;
-
-                    } catch (error) {
-                        console.log(`Error with model ${models[currentModelIndex]}, trying next...`);
-                        currentModelIndex++;
                     }
-                }
-
-                if (!success) {
-                    throw new Error('All models failed');
                 }
             } catch (error) {
                 console.error('Error:', error);
-                appendMessage('error', 'Failed to get response. Please try again.');
-            } finally {
-                isProcessing = false;  // Reset processing flag
-                messageInput.disabled = false;
-                sendButton.disabled = false;
-                loadingDiv.style.display = 'none';
-                messageInput.focus();
+                showError('Failed to get response from AI. Please try again.');
             }
         }
 
@@ -468,84 +487,4 @@ document.addEventListener("DOMContentLoaded", async () => {
             reader.readAsDataURL(file);
         }
     });
-
-    // Modify the existing sendMessage function's while loop
-    while (!success && retries < models.length) {
-        try {
-            let requestBody;
-            
-            if (currentImage) {
-                // Use vision model if image is present
-                requestBody = {
-                    model: "meta-llama/llama-3.2-90b-vision-instruct:free",
-                    messages: [
-                        ...conversationHistory.slice(0, -1),
-                        {
-                            role: "user",
-                            content: [
-                                {
-                                    type: "text",
-                                    text: message
-                                },
-                                {
-                                    type: "image_url",
-                                    image_url: {
-                                        url: `data:image/jpeg;base64,${currentImage}`
-                                    }
-                                }
-                            ]
-                        }
-                    ]
-                };
-            } else {
-                // Use regular models if no image
-                requestBody = {
-                    model: models[retries],
-                    messages: conversationHistory
-                };
-            }
-
-            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (!response.ok) throw new Error(currentImage ? 'Vision model failed' : 'Model failed');
-
-            const data = await response.json();
-            const aiMessage = data.choices[0].message.content;
-            
-            // Add the message to history (handling both regular and vision messages)
-            if (currentImage) {
-                conversationHistory.push({
-                    role: "user",
-                    content: message // Store only the text for history
-                });
-            }
-            conversationHistory.push({ role: "assistant", content: aiMessage });
-            
-            appendMessage('ai', aiMessage);
-            success = true;
-
-            // Clear image state after successful response
-            if (currentImage) {
-                currentImage = null;
-                imageButton.style.backgroundColor = '';
-                imageButton.textContent = 'Add Image';
-            }
-        } catch (error) {
-            console.error(`Error with ${currentImage ? 'vision' : 'regular'} model:`, error);
-            if (currentImage) {
-                // If vision model fails, clear image and try regular models
-                currentImage = null;
-                imageButton.style.backgroundColor = '';
-                imageButton.textContent = 'Add Image';
-            }
-            retries++;
-        }
-    }
 }); 
