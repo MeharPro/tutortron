@@ -410,26 +410,60 @@ router.get('/api/keys', async (request, env) => {
     }
 });
 
-// Update the tutor route to handle different modes
+// Add at the top with other helper functions
+function handleError(type, headers = {}) {
+  switch (type) {
+    case 'not-found':
+      return Response.redirect('/invalid-link.html', 302);
+    case 'unauthorized':
+      return Response.redirect('/unauthorized.html', 302);
+    case 'server-error':
+      return Response.redirect('/error.html', 302);
+    default:
+      return Response.redirect('/invalid-link.html', 302);
+  }
+}
+
+// Update the catch-all route at the bottom
+router.get('*', async (request, env) => {
+  const url = new URL(request.url);
+  
+  // If it's an API request, return 404
+  if (url.pathname.startsWith('/api/')) {
+    return new Response('Not Found', { status: 404 });
+  }
+
+  try {
+    // Attempt to serve static file
+    const response = await serveStaticFile(url, env);
+    if (response.status === 404) {
+      return handleError('not-found');
+    }
+    return response;
+  } catch (error) {
+    console.error('Error serving file:', error);
+    return handleError('server-error');
+  }
+});
+
+// Update the tutor route error handling
 router.get('/:mode/:linkId', async (request, env) => {
     try {
         const { mode, linkId } = request.params;
-        console.log('Looking for link:', linkId, 'Mode:', mode);
-
+        
         // Validate mode
         const validModes = ['investigator', 'comparitor', 'quest', 'codebreaker', 'eliminator'];
         if (!validModes.includes(mode)) {
-            return Response.redirect('/invalid-link.html', 302);
+            return handleError('not-found');
         }
 
-        // Validate linkId format (should be UUID)
+        // Validate linkId format
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(linkId)) {
-            console.log('Invalid link format:', linkId);
-            return Response.redirect('/invalid-link.html', 302);
+            return handleError('not-found');
         }
         
-        // Find teacher that has this link
+        // Find link
         let foundLink = null;
         const teachersList = await env.TEACHERS.list();
         
@@ -447,11 +481,8 @@ router.get('/:mode/:linkId', async (request, env) => {
         }
 
         if (!foundLink) {
-            console.log('Link not found:', linkId);
-            return Response.redirect('/invalid-link.html', 302);
+            return handleError('not-found');
         }
-
-        console.log('Found link:', foundLink);
 
         // Get the tutor HTML
         let tutorHtml = await env.FILES.get('tutor.html');
@@ -485,17 +516,15 @@ router.get('/:mode/:linkId', async (request, env) => {
         });
     } catch (error) {
         console.error('Error serving tutor page:', error);
-        return Response.redirect('/invalid-link.html', 302);
+        return handleError('server-error');
     }
 });
 
-// Update the tutor config route to only return the refined prompt
+// Update the tutor config route
 router.get('/api/tutor/:linkId', async (request, env) => {
     try {
         const { linkId } = request.params;
-        console.log('Looking for link:', linkId);
         
-        // Find teacher that has this link
         let foundLink = null;
         const teachersList = await env.TEACHERS.list();
         
@@ -513,14 +542,9 @@ router.get('/api/tutor/:linkId', async (request, env) => {
         }
 
         if (!foundLink) {
-            console.log('Link not found:', linkId);
-            return new Response(JSON.stringify({ message: 'Link not found' }), {
-                status: 404,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
+            return handleError('not-found');
         }
 
-        console.log('Found link:', foundLink);
         return new Response(JSON.stringify({
             subject: foundLink.subject,
             prompt: foundLink.prompt,
@@ -530,10 +554,7 @@ router.get('/api/tutor/:linkId', async (request, env) => {
         });
     } catch (error) {
         console.error('Error getting tutor config:', error);
-        return new Response(JSON.stringify({ message: 'Server error' }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return handleError('server-error');
     }
 });
 
@@ -560,18 +581,6 @@ router.post('/api/report-error', async (request, env) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }
-});
-
-// Keep the catch-all route at the end
-router.get('*', async (request, env) => {
-  const url = new URL(request.url);
-  
-  // If it's an API request, return 404
-  if (url.pathname.startsWith('/api/')) {
-    return new Response('Not Found', { status: 404 });
-  }
-    // Serve static files
-  return serveStaticFile(url, env);
 });
 
 export default {
