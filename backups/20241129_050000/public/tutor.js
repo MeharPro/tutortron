@@ -171,43 +171,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Content formatting functions
     function formatMathContent(content) {
-        // Language aliases mapping
-        const languageAliases = {
-            'cpp': 'cpp',
-            'c++': 'cpp',
-            'Cpp': 'cpp',
-            'CPP': 'cpp',
-            'py': 'python',
-            'python': 'python',
-            'Python': 'python',
-            'js': 'javascript',
-            'javascript': 'javascript',
-            'JavaScript': 'javascript',
-            'java': 'java',
-            'Java': 'java',
-            'cs': 'csharp',
-            'csharp': 'csharp',
-            'c#': 'csharp',
-            'C#': 'csharp',
-            'html': 'html',
-            'HTML': 'html',
-            'css': 'css',
-            'CSS': 'css',
-            'sql': 'sql',
-            'SQL': 'sql',
-            'bash': 'bash',
-            'sh': 'bash',
-            'shell': 'bash',
-            'typescript': 'typescript',
-            'ts': 'typescript',
-            'TypeScript': 'typescript'
-        };
-
         // First protect code blocks from other formatting
         const codeBlocks = [];
         content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
-            const normalizedLang = lang ? languageAliases[lang] || lang.toLowerCase() : '';
-            codeBlocks.push({ language: normalizedLang, code: code.trim() });
+            codeBlocks.push({ language: lang || '', code: code.trim() });
             return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
         });
 

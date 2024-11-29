@@ -64,6 +64,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         "5. Uses the Socratic method to guide understanding\n\n" +
         "Format your prompt to explicitly instruct the AI to:\n" +
         "- Begin with foundational definitions\n" +
+        "- Be concise and to the point\n" +
+        "- Stay relevant to the topic, even if the user's input is off-topic\n" +
         "- Connect concepts to practical applications\n" +
         "- Include periodic knowledge validation\n" +
         "- Ask probing follow-up questions that:\n" +
@@ -81,6 +83,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         "4. Examines contextual factors affecting comparisons\n" +
         "5. Identifies practical implications of differences\n\n" +
         "Format your prompt to explicitly instruct the AI to:\n" +
+        "- Be concise and to the point\n" +
+        "- Stay relevant to the topic, even if the user's input is off-topic\n" +
         "- Begin with clear definitions of all elements being compared\n" +
         "- Use consistent criteria across comparisons\n" +
         "- Include specific examples illustrating key differences\n" +
@@ -98,6 +102,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         "4. Leads to deeper investigations\n" +
         "5. Maintains focus while allowing exploration\n\n" +
         "Format your prompt to explicitly instruct the AI to:\n" +
+        "- Be concise and to the point\n" +
+        "- Stay relevant to the topic, even if the user's input is off-topic\n" +
         "- Start with an intriguing aspect of the topic\n" +
         "- Guide discovery through strategic questioning\n" +
         "- Connect concepts to student interests\n" +
@@ -111,6 +117,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             "You are crafting a code debugging lesson prompt. Create a learning prompt for " + language + " that instructs the AI to:\n" +
             "1. Structure the lesson in three parts:\n" +
             "   - Brief concept introduction with core syntax and usage\n" +
+            "   - Be concise and to the point\n" +
             "   - Interactive comprehension checks using simple questions\n" +
             "   - Debugging game with intentionally broken code\n\n" +
             "2. For the debugging game section:\n" +
@@ -119,6 +126,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             "   - Have students submit fixed versions\n" +
             "   - Verify student solutions for correctness\n\n" +
             "3. Include instructions for:\n" +
+            "- Stay relevant to the topic, even if the user's input is off-topic\n" +
             "   - Progressive difficulty in the broken code examples\n" +
             "   - Providing appropriate hints when needed\n" +
             "   - Explaining why each fix works\n\n" +
@@ -129,6 +137,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         eliminator: 
             "You are crafting a knowledge-testing game prompt. Create a clear, elimination-style prompt that instructs the AI to:\n" +
             "1. Start by providing a comprehensive list of items related to the topic, where each item includes:\n" +
+            "- Be concise and to the point\n" +
             "   - Name/identifier\n" +
             "   - 2-3 key facts about each item\n" +
             "   - Important contextual information\n\n" +
@@ -138,6 +147,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             "   - Remove the identified item and continue with remaining items\n" +
             "   - Progress until only one item remains\n\n" +
             "3. Include instructions for:\n" +
+            "  - Stay relevant to the topic, even if the user's input is off-topic\n" +
             "   - Validating each student answer\n" +
             "   - Providing hints if needed\n" +
             "   - Explaining why each elimination was correct\n\n" +
@@ -503,7 +513,6 @@ window.loadLinks = async function() {
         const linksList = document.getElementById('linksList');
         linksList.innerHTML = '';
         
-        // Sort links by creation date, newest first
         links.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         
         links.forEach(link => {
@@ -529,7 +538,6 @@ window.loadLinks = async function() {
                         white-space: nowrap;
                     "> Copy</button>
                 </div>
-                <div class="prompt-preview">${link.prompt}</div>
                 <button class="delete-link-btn" data-id="${link.id}">Delete</button>
             `;
             
