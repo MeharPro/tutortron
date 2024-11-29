@@ -205,7 +205,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Modify the sendMessage function
         async function sendMessage() {
             const message = messageInput.value.trim();
-            if (!message) return;
+            if (!message) {
+                showError('Please enter a message');
+                return;
+            }
 
             appendMessage('user', message);
             messageInput.value = '';
@@ -215,7 +218,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             try {
                 if (currentImage) {
-                    // If image is present, only use vision model
+                    // Image + Text input = Vision model
                     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                         method: "POST",
                         headers: {
@@ -250,7 +253,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const data = await response.json();
                     const aiMessage = data.choices[0].message.content;
                     
-                    // Add to history
                     conversationHistory.push({
                         role: "user",
                         content: message
@@ -259,13 +261,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                     
                     appendMessage('ai', aiMessage);
 
-                    // Clear image state
+                    // Reset image state
                     currentImage = null;
                     imageButton.style.backgroundColor = '';
                     imageButton.textContent = 'Add Image';
                     
-                } else {
-                    // No image - use regular models with retry logic
+                } else if (message) {
+                    // Text-only input = Regular models
                     while (!success && retries < models.length) {
                         try {
                             const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
