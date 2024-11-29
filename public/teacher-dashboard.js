@@ -65,6 +65,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         "Format your prompt to explicitly instruct the AI to:\n" +
         "- Begin with foundational definitions\n" +
         "- Be concise and to the point\n" +
+        "- Stay relevant to the topic, even if the user's input is off-topic\n" +
         "- Connect concepts to practical applications\n" +
         "- Include periodic knowledge validation\n" +
         "- Ask probing follow-up questions that:\n" +
@@ -83,6 +84,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         "5. Identifies practical implications of differences\n\n" +
         "Format your prompt to explicitly instruct the AI to:\n" +
         "- Be concise and to the point\n" +
+        "- Stay relevant to the topic, even if the user's input is off-topic\n" +
         "- Begin with clear definitions of all elements being compared\n" +
         "- Use consistent criteria across comparisons\n" +
         "- Include specific examples illustrating key differences\n" +
@@ -101,6 +103,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         "5. Maintains focus while allowing exploration\n\n" +
         "Format your prompt to explicitly instruct the AI to:\n" +
         "- Be concise and to the point\n" +
+        "- Stay relevant to the topic, even if the user's input is off-topic\n" +
         "- Start with an intriguing aspect of the topic\n" +
         "- Guide discovery through strategic questioning\n" +
         "- Connect concepts to student interests\n" +
@@ -123,6 +126,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             "   - Have students submit fixed versions\n" +
             "   - Verify student solutions for correctness\n\n" +
             "3. Include instructions for:\n" +
+            "- Stay relevant to the topic, even if the user's input is off-topic\n" +
             "   - Progressive difficulty in the broken code examples\n" +
             "   - Providing appropriate hints when needed\n" +
             "   - Explaining why each fix works\n\n" +
@@ -143,6 +147,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             "   - Remove the identified item and continue with remaining items\n" +
             "   - Progress until only one item remains\n\n" +
             "3. Include instructions for:\n" +
+            "  - Stay relevant to the topic, even if the user's input is off-topic\n" +
             "   - Validating each student answer\n" +
             "   - Providing hints if needed\n" +
             "   - Explaining why each elimination was correct\n\n" +
