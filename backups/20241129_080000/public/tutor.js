@@ -99,8 +99,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Define models
     const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
     const models = [
-        "meta-llama/llama-3.2-90b-vision-instruct:free",
         "google/learnlm-1.5-pro-experimental:free",
+        "meta-llama/llama-3.2-90b-vision-instruct:free",
         "openchat/openchat-7b:free",
         "liquid/lfm-40b:free",
         "google/gemini-exp-1121:free",
@@ -171,10 +171,43 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Content formatting functions
     function formatMathContent(content) {
+        // Language aliases mapping
+        const languageAliases = {
+            'cpp': 'cpp',
+            'c++': 'cpp',
+            'Cpp': 'cpp',
+            'CPP': 'cpp',
+            'py': 'python',
+            'python': 'python',
+            'Python': 'python',
+            'js': 'javascript',
+            'javascript': 'javascript',
+            'JavaScript': 'javascript',
+            'java': 'java',
+            'Java': 'java',
+            'cs': 'csharp',
+            'csharp': 'csharp',
+            'c#': 'csharp',
+            'C#': 'csharp',
+            'html': 'html',
+            'HTML': 'html',
+            'css': 'css',
+            'CSS': 'css',
+            'sql': 'sql',
+            'SQL': 'sql',
+            'bash': 'bash',
+            'sh': 'bash',
+            'shell': 'bash',
+            'typescript': 'typescript',
+            'ts': 'typescript',
+            'TypeScript': 'typescript'
+        };
+
         // First protect code blocks from other formatting
         const codeBlocks = [];
-        content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
-            codeBlocks.push({ language: lang || '', code: code.trim() });
+        content = content.replace(/```([\w+]+)?\s*([\s\S]*?)```/g, (match, lang, code) => {
+            const normalizedLang = lang ? languageAliases[lang.trim()] || lang.toLowerCase() : '';
+            codeBlocks.push({ language: normalizedLang, code: code.trim() });
             return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
         });
 
@@ -197,7 +230,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Restore code blocks with syntax highlighting
         content = content.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
             const block = codeBlocks[parseInt(index)];
-            return `<pre><code class="language-${block.language}">${escapeHtml(block.code)}</code></pre>`;
+            const formattedCode = block.code
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            return `<pre><code class="language-${block.language}">${formattedCode}</code></pre>`;
         });
 
         return content;
@@ -215,13 +251,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         messageDiv.className = `message ${type}-message`;
         
         if (type === 'ai') {
+            // Format code blocks first
             content = formatMathContent(content);
-            content = content
-                .replace(/^Step (\d+)/gm, '<h3>Step $1</h3>')
-                .replace(/^• (.*?)$/gm, '<div class="bullet">• $1</div>')
-                .replace(/<br><br>/g, '</div><div class="paragraph">');
-            
-            messageDiv.innerHTML = `<div class="paragraph">${content}</div>`;
+
+            // Create a wrapper for the content
+            const wrapper = document.createElement('div');
+            wrapper.className = 'message-content';
+
+            // Split content into paragraphs and handle each one
+            const paragraphs = content.split('<br><br>');
+            paragraphs.forEach(paragraph => {
+                if (paragraph.includes('<pre><code')) {
+                    // If it's a code block, add it directly
+                    wrapper.innerHTML += paragraph;
+                } else {
+                    // If it's regular text, wrap in paragraph div
+                    wrapper.innerHTML += `<div class="paragraph">${paragraph}</div>`;
+                }
+            });
+
+            messageDiv.appendChild(wrapper);
             
             // Process MathJax
             if (mathJaxReady && window.MathJax?.typesetPromise) {
@@ -245,21 +294,73 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Add syntax highlighting styles
     const codeStyle = document.createElement('style');
     codeStyle.textContent = `
+        .message-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .paragraph {
+            margin: 0;
+            line-height: 1.5;
+        }
         pre {
             background-color: #1e1e1e;
             border-radius: 6px;
             padding: 12px;
-            margin: 10px 0;
+            margin: 0;
             overflow-x: auto;
+            width: 100%;
         }
         code {
             font-family: 'Fira Code', monospace;
             font-size: 14px;
             line-height: 1.5;
+            width: 100%;
+            display: inline-block;
         }
         .hljs {
             background: #1e1e1e;
-            color: #d4d4d4;
+            color: #808080;
+            padding: 0;
+        }
+        /* Special text colors */
+        .hljs-keyword {
+            color: #569cd6;  /* blue for keywords like while, for, if */
+        }
+        .hljs-title {
+            color: #4ec9b0;  /* teal for titles/functions */
+        }
+        .hljs-string {
+            color: #ce9178;  /* orange for strings */
+        }
+        .hljs-comment {
+            color: #6a9955;  /* green for comments */
+        }
+        .hljs-literal {
+            color: #569cd6;  /* blue for true/false */
+        }
+        .hljs-built_in {
+            color: #4ec9b0;  /* teal for built-in functions */
+        }
+        .hljs-params {
+            color: #9cdcfe;  /* light blue for parameters */
+        }
+        .hljs-number {
+            color: #b5cea8;  /* light green for numbers */
+        }
+        .hljs-operator {
+            color: #d4d4d4;  /* white for operators */
+        }
+        /* Additional styles for markdown-like syntax */
+        .hljs-section {
+            color: #808080;  /* grey for markdown sections */
+        }
+        .hljs-emphasis {
+            color: #6a9955;  /* green for emphasized text */
+            font-style: italic;
+        }
+        .hljs-strong {
+            color: #569cd6;  /* blue for strong text */
         }
     `;
     document.head.appendChild(codeStyle);
@@ -354,7 +455,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             const reader = new FileReader();
             reader.onload = function(e) {
                 currentImage = e.target.result.split(',')[1];
-                imageButton.style.backgroundColor = '#4F46E5';
+                imageButton.style.backgroundColor = '#22c55e';
+                imageButton.style.color = '#ffffff';
                 imageButton.textContent = 'Image Added';
             };
             reader.readAsDataURL(file);
@@ -382,7 +484,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
-    document.getElementById('copyButton').addEventListener('click', () => {
+    document.getElementById('copyButton').addEventListener('click', async () => {
         const messages = Array.from(chatContainer.children).map(msg => {
             const role = msg.classList.contains('user-message') ? 'You' : 'Tutor';
             return `${role}: ${msg.textContent}`;
@@ -390,20 +492,56 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         const chatText = messages.join('\n\n');
         
-        navigator.clipboard.writeText(chatText).then(() => {
-            const notification = document.createElement('div');
-            notification.className = 'copy-notification';
-            notification.textContent = 'Chat copied to clipboard!';
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.remove();
-            }, 2000);
-        }).catch(err => {
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(chatText);
+                showCopyNotification('Chat copied to clipboard!');
+            } else {
+                const textArea = document.createElement('textarea');
+                textArea.value = chatText;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
+                try {
+                    document.execCommand('copy');
+                    textArea.remove();
+                    showCopyNotification('Chat copied to clipboard!');
+                } catch (err) {
+                    console.error('Fallback copy failed:', err);
+                    textArea.remove();
+                    throw new Error('Copy failed');
+                }
+            }
+        } catch (err) {
             console.error('Failed to copy:', err);
             showError('Failed to copy chat to clipboard');
-        });
+        }
     });
+
+    function showCopyNotification(message) {
+        const notification = document.createElement('div');
+        notification.className = 'copy-notification';
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        notification.style.position = 'fixed';
+        notification.style.bottom = '20px';
+        notification.style.left = '50%';
+        notification.style.transform = 'translateX(-50%)';
+        notification.style.backgroundColor = '#22c55e';
+        notification.style.color = 'white';
+        notification.style.padding = '12px 24px';
+        notification.style.borderRadius = '6px';
+        notification.style.zIndex = '1000';
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 2000);
+    }
 
     // Initialize tutor
     try {

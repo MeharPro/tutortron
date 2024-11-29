@@ -17,24 +17,17 @@ async function serveStaticFile(url, env) {
     // Attempt to get the file from KV storage
     const file = await env.FILES.get(path);
     if (file === null) {
-      // Try index.html for directory requests
-      if (path.endsWith('/')) {
-        const indexFile = await env.FILES.get(path + 'index.html');
-        if (indexFile === null) {
-          return new Response('Not Found', { status: 404 });
-        }
-        return new Response(indexFile, {
-          headers: { 'Content-Type': 'text/html' },
-        });
-      }
       return new Response('Not Found', { status: 404 });
     }
     
-    // Set appropriate content type
+    // Set appropriate content type and caching headers
     const contentType = getContentType(path);
-    return new Response(file, {
-      headers: { 'Content-Type': contentType },
-    });
+    const headers = {
+      'Content-Type': contentType,
+      'Cache-Control': path.endsWith('.css') ? 'no-cache' : 'public, max-age=3600'
+    };
+
+    return new Response(file, { headers });
   } catch (error) {
     console.error('Error serving file:', error);
     return new Response('Internal Server Error', { status: 500 });
@@ -45,16 +38,22 @@ async function serveStaticFile(url, env) {
 function getContentType(filename) {
   const ext = filename.split('.').pop().toLowerCase();
   const types = {
-    'html': 'text/html',
-    'css': 'text/css',
-    'js': 'application/javascript',
-    'json': 'application/json',
+    'html': 'text/html; charset=utf-8',
+    'css': 'text/css; charset=utf-8',
+    'js': 'application/javascript; charset=utf-8',
+    'json': 'application/json; charset=utf-8',
     'png': 'image/png',
     'jpg': 'image/jpeg',
     'jpeg': 'image/jpeg',
-    'gif': 'image/gif'
+    'gif': 'image/gif',
+    'svg': 'image/svg+xml',
+    'woff': 'font/woff',
+    'woff2': 'font/woff2',
+    'ttf': 'font/ttf',
+    'otf': 'font/otf',
+    'eot': 'application/vnd.ms-fontobject'
   };
-  return types[ext] || 'text/plain';
+  return types[ext] || 'text/plain; charset=utf-8';
 }
 
 // Simple JWT functions
@@ -562,13 +561,13 @@ router.post('/api/report-error', async (request, env) => {
     }
 });
 
-// Keep the catch-all route at the end
-router.get('*', async (request, env) => {
+// Handle all routes
+router.all('*', async (request, env) => {
   const url = new URL(request.url);
   
-  // If it's an API request, return 404
+  // API routes
   if (url.pathname.startsWith('/api/')) {
-    return new Response('Not Found', { status: 404 });
+    return router.handle(request, env);
   }
   
   // Serve static files
