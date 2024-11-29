@@ -117,44 +117,45 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         // Function to create and append a message
+        function formatMathContent(content) {
+            // Format step headers
+            content = content.replace(/## Step (\d+)/g, '**Step $1**');
+            
+            // Format LaTeX equations
+            content = content.replace(/\\\((.*?)\\\)/g, '`$1`');
+            content = content.replace(/\\\[(.*?)\\\]/g, '`$1`');
+            
+            // Format boxed answer
+            content = content.replace(/\$\\boxed{(.*?)}\$/, '**Final Answer:** `$1`');
+            
+            // Add line breaks between steps
+            content = content.split('\n\n').join('\n');
+            
+            return content;
+        }
+
         function appendMessage(type, content) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}-message`;
             
             if (type === 'ai') {
-                // First, handle code blocks separately
-                content = content.replace(/```(\w+)?\s*([\s\S]*?)```/g, (match, lang, code) => {
-                    // Clean up the code block
-                    const cleanCode = code.trim()
-                        .replace(/^\n+|\n+$/g, '')  // Remove leading/trailing newlines
-                        .replace(/\t/g, '    ');     // Convert tabs to spaces
-                    
-                    // Map language names
-                    let language = (lang || 'text').toLowerCase();
-                    if (language === 'c++') language = 'cpp';
-                    
-                    return `<pre><code class="language-${language}">${cleanCode}</code></pre>`;
-                });
-
-                // Then handle other markdown elements
+                // Check if content contains math
+                if (content.includes('\\') || content.includes('$')) {
+                    content = formatMathContent(content);
+                }
+                
+                // Convert markdown
                 content = content
-                    // Handle bold text
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    // Handle inline code
-                    .replace(/`([^`]+)`/g, '<code>$1</code>')
-                    // Handle bullet points
-                    .replace(/^\* (.+)$/gm, '<li>$1</li>')
-                    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
-                    // Handle numbered lists
-                    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-                    .replace(/(<li>.*<\/li>)/gs, '<ol>$1</ol>')
-                    // Handle paragraphs (but not inside code blocks)
-                    .split('\n\n')
-                    .map(p => !p.includes('<pre>') ? `<p>${p}</p>` : p)
-                    .join('');
+                    .replace(/`([^`]+)`/g, '<span class="math">$1</span>')
+                    .replace(/\n/g, '<br>');
                 
                 messageDiv.innerHTML = content;
-                highlightCode(messageDiv);
+                
+                // Process math
+                if (window.MathJax) {
+                    window.MathJax.typesetPromise([messageDiv]);
+                }
             } else {
                 messageDiv.textContent = content;
             }
@@ -162,6 +163,37 @@ document.addEventListener("DOMContentLoaded", async () => {
             chatContainer.appendChild(messageDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
+
+        // Add minimal styling for math content
+        const style = document.createElement('style');
+        style.textContent = `
+            .message {
+                margin: 10px;
+                padding: 10px;
+                border-radius: 8px;
+                max-width: 80%;
+                font-size: 14px;
+                line-height: 1.5;
+            }
+            .user-message {
+                background: #e9ecef;
+                margin-left: auto;
+            }
+            .ai-message {
+                background: #f8f9fa;
+                margin-right: auto;
+            }
+            .math {
+                font-family: 'Times New Roman', serif;
+                padding: 0 4px;
+                color: #1a1a1a;
+            }
+            strong {
+                color: #2c3e50;
+                font-weight: 600;
+            }
+        `;
+        document.head.appendChild(style);
 
         // Handle sending messages
         sendButton.addEventListener('click', sendMessage);
