@@ -214,6 +214,28 @@ document.addEventListener("DOMContentLoaded", async () => {
             try {
                 if (currentImage) {
                     // If image is present, use vision model
+                    const visionMessages = [
+                        { 
+                            role: "system", 
+                            content: "You are Tutor-Tron, an AI that can see and analyze images. Help the user understand the image content and answer their questions about it."
+                        },
+                        {
+                            role: "user",
+                            content: [
+                                {
+                                    type: "text",
+                                    text: message
+                                },
+                                {
+                                    type: "image_url",
+                                    image_url: {
+                                        url: `data:image/jpeg;base64,${currentImage}`
+                                    }
+                                }
+                            ]
+                        }
+                    ];
+
                     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                         method: "POST",
                         headers: {
@@ -222,24 +244,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         },
                         body: JSON.stringify({
                             model: "meta-llama/llama-3.2-90b-vision-instruct:free",
-                            messages: [
-                                ...conversationHistory,
-                                {
-                                    role: "user",
-                                    content: [
-                                        {
-                                            type: "text",
-                                            text: message
-                                        },
-                                        {
-                                            type: "image_url",
-                                            image_url: {
-                                                url: `data:image/jpeg;base64,${currentImage}`
-                                            }
-                                        }
-                                    ]
-                                }
-                            ]
+                            messages: visionMessages
                         })
                     });
 
@@ -248,15 +253,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const data = await response.json();
                     const aiMessage = data.choices[0].message.content;
                     
-                    // Add to history - include both text and image reference
+                    // Add to history - store as text only for future context
                     conversationHistory.push({
                         role: "user",
-                        content: [
-                            { type: "text", text: message },
-                            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${currentImage}` } }
-                        ]
+                        content: `[Image uploaded] ${message}`
                     });
-                    conversationHistory.push({ role: "assistant", content: aiMessage });
+                    conversationHistory.push({ 
+                        role: "assistant", 
+                        content: aiMessage 
+                    });
                     
                     appendMessage('ai', aiMessage);
 
