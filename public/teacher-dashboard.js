@@ -508,13 +508,15 @@ window.loadLinks = async function() {
         const linksList = document.getElementById('linksList');
         linksList.innerHTML = '';
         
-        // Sort links by creation date, newest first
         links.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         
         links.forEach(link => {
             const linkCard = document.createElement('div');
             linkCard.className = `link-card ${link.mode || 'investigator'}`;
             const fullUrl = `${window.location.origin}/${link.mode || 'investigator'}/${link.id}`;
+            
+            // Filter out system prompt from display
+            const displayPrompt = link.prompt.replace(/You are crafting.*?IMPORTANT:.*?\n\n/s, '').trim();
             
             linkCard.innerHTML = `
                 <h3>${link.subject}</h3>
@@ -534,7 +536,7 @@ window.loadLinks = async function() {
                         white-space: nowrap;
                     "> Copy</button>
                 </div>
-                <div class="prompt-preview">${link.prompt}</div>
+                <div class="prompt-preview">${displayPrompt}</div>
                 <button class="delete-link-btn" data-id="${link.id}">Delete</button>
             `;
             
