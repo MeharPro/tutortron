@@ -116,7 +116,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             loadingDiv.style.display = 'none';
         }
 
-        // Add MathJax configuration before loading the script
+        // MathJax configuration
         window.MathJax = {
             loader: {load: ['[tex]/ams']},
             tex: {
@@ -132,8 +132,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         };
 
-        // Load MathJax script
-        const loadMathJax = () => {
+        // Function to load MathJax
+        function loadMathJax() {
             return new Promise((resolve, reject) => {
                 const script = document.createElement('script');
                 script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
@@ -142,7 +142,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 script.onerror = reject;
                 document.head.appendChild(script);
             });
-        };
+        }
+
+        // Load MathJax
+        try {
+            await loadMathJax();
+            console.log('MathJax loaded successfully');
+        } catch (err) {
+            console.error('Failed to load MathJax:', err);
+        }
 
         // Function to typeset math with retry
         async function typesetMath(element) {
@@ -520,7 +528,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             speakButton.textContent = '🔇 Stop Speaking';
             speakButton.style.backgroundColor = '#dc2626';
         } else {
-            speakButton.textContent = '�� Speak Response';
+            speakButton.textContent = ' Speak Response';
             speakButton.style.backgroundColor = '#4b5563';
         }
     }
