@@ -471,72 +471,81 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Modify the existing sendMessage function's while loop
     while (!success && retries < models.length) {
-        if (currentImage) {
-            // Use vision model for image
-            try {
-                const visionMessage = {
-                    role: "user",
-                    content: [
+        try {
+            let requestBody;
+            
+            if (currentImage) {
+                // Use vision model if image is present
+                requestBody = {
+                    model: "meta-llama/llama-3.2-90b-vision-instruct:free",
+                    messages: [
+                        ...conversationHistory.slice(0, -1),
                         {
-                            type: "text",
-                            text: message
-                        },
-                        {
-                            type: "image_url",
-                            image_url: {
-                                url: `data:image/jpeg;base64,${currentImage}`
-                            }
+                            role: "user",
+                            content: [
+                                {
+                                    type: "text",
+                                    text: message
+                                },
+                                {
+                                    type: "image_url",
+                                    image_url: {
+                                        url: `data:image/jpeg;base64,${currentImage}`
+                                    }
+                                }
+                            ]
                         }
                     ]
                 };
+            } else {
+                // Use regular models if no image
+                requestBody = {
+                    model: models[retries],
+                    messages: conversationHistory
+                };
+            }
 
-                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                    method: "POST",
-                    headers: {
-                        Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        model: "meta-llama/llama-3.2-90b-vision-instruct:free",
-                        messages: [...conversationHistory.slice(0, -1), visionMessage]
-                    }),
+            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) throw new Error(currentImage ? 'Vision model failed' : 'Model failed');
+
+            const data = await response.json();
+            const aiMessage = data.choices[0].message.content;
+            
+            // Add the message to history (handling both regular and vision messages)
+            if (currentImage) {
+                conversationHistory.push({
+                    role: "user",
+                    content: message // Store only the text for history
                 });
+            }
+            conversationHistory.push({ role: "assistant", content: aiMessage });
+            
+            appendMessage('ai', aiMessage);
+            success = true;
 
-                if (!response.ok) throw new Error('Vision model failed');
-
-                const data = await response.json();
-                const aiMessage = data.choices[0].message.content;
-                conversationHistory.push(visionMessage);
-                conversationHistory.push({ role: "assistant", content: aiMessage });
-                appendMessage('ai', aiMessage);
+            // Clear image state after successful response
+            if (currentImage) {
                 currentImage = null;
                 imageButton.style.backgroundColor = '';
                 imageButton.textContent = 'Add Image';
-                success = true;
-            } catch (error) {
-                console.error('Vision model failed:', error);
-                success = false;
-                break; // Don't retry with other models if vision fails
             }
-        } else {
-            // Use regular models (existing code)
-            try {
-                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                    method: "POST",
-                    headers: {
-                        Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        model: models[retries],
-                        messages: conversationHistory
-                    }),
-                });
-                // ... rest of the existing code for regular models ...
-            } catch (error) {
-                console.error(`Error with model ${models[retries]}:`, error);
-                retries++;
+        } catch (error) {
+            console.error(`Error with ${currentImage ? 'vision' : 'regular'} model:`, error);
+            if (currentImage) {
+                // If vision model fails, clear image and try regular models
+                currentImage = null;
+                imageButton.style.backgroundColor = '';
+                imageButton.textContent = 'Add Image';
             }
+            retries++;
         }
     }
 }); 
