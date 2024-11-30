@@ -232,7 +232,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     'X-Title': 'Tutor-Tron'
                 },
                 body: JSON.stringify({
-                    model: getRandomModel(),
+                    model: imageBase64 ? VISION_MODEL : FREE_MODELS[currentModelIndex],
                     messages: conversationHistory,
                     temperature: 0.7,
                     max_tokens: 400
@@ -396,7 +396,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     'X-Title': 'Tutor-Tron'
                 },
                 body: JSON.stringify({
-                    model: VISION_MODEL,
+                    model: imageBase64 ? VISION_MODEL : FREE_MODELS[currentModelIndex],
                     messages: conversationHistory,
                     temperature: 0.7,
                     max_tokens: 400
