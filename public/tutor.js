@@ -78,8 +78,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     const pathParts = window.location.pathname.split('/');
     const linkId = pathParts[pathParts.length - 1];
 
-    // Initialize conversation with the prompt and get first response
-    if (prompt) {
+    // Verify link is valid
+    try {
+        const linkResponse = await fetch(`/api/links/${linkId}`);
+        if (!linkResponse.ok) {
+            throw new Error('Invalid link');
+        }
+        const linkData = await linkResponse.json();
+        
+        // Initialize conversation with the prompt and get first response
         isProcessing = true;
         if (loadingDiv) loadingDiv.style.display = 'block';
 
@@ -127,6 +134,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             isProcessing = false;
             if (loadingDiv) loadingDiv.style.display = 'none';
         }
+    } catch (error) {
+        console.error('Error verifying link:', error);
+        window.location.href = '/invalid-link.html';
+        return;
     }
 
     // Error tracking setup
@@ -673,130 +684,69 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Message handling functions
-    async function sendMessage() {
-        if (isProcessing) return;
+    async function handleSendMessage() {
+        if (isProcessing || !messageInput.value.trim()) return;
         
-        const message = messageInput.value.trim();
-        if (!message) return;
-
+        const userMessage = messageInput.value.trim();
+        messageInput.value = '';
+        
+        appendMessage('user', userMessage);
+        
         isProcessing = true;
-        loadingDiv.style.display = 'block';
+        if (loadingDiv) loadingDiv.style.display = 'block';
         
         try {
-            appendMessage('user', message);
-            messageInput.value = '';
-            messageInput.style.height = 'auto';
-
-            if (currentImage) {
-                await handleImageMessage(message);
-            } else {
-                await handleTextMessage(message);
+            // Add user message to history
+            conversationHistory.push({
+                role: "user",
+                content: userMessage
+            });
+            
+            // Get AI response
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
+                    'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+                    'X-Title': 'Tutor-Tron'
+                },
+                body: JSON.stringify({
+                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-opus',
+                    messages: conversationHistory,
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to get AI response');
             }
+            
+            const data = await response.json();
+            const aiMessage = data.choices[0].message.content;
+            
+            // Add AI's response to history
+            conversationHistory.push({
+                role: "assistant",
+                content: aiMessage
+            });
+            
+            // Display the AI's response
+            appendMessage('ai', aiMessage);
         } catch (error) {
-            console.error("Error:", error);
-            appendMessage('error', 'Failed to get response. Please try again.');
+            console.error('Error getting AI response:', error);
+            showError('Failed to get response from tutor. Please try again.');
         } finally {
             isProcessing = false;
-            loadingDiv.style.display = 'none';
-        }
-    }
-
-    async function handleImageMessage(message) {
-        console.log(`Using vision model: ${VISION_MODEL}`);
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model: VISION_MODEL,
-                messages: [{
-                    role: "user",
-                    content: [
-                        { type: "text", text: message },
-                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${currentImage}` } }
-                    ]
-                }]
-            })
-        });
-
-        if (!response.ok) {
-            console.error(`Vision model failed with status ${response.status}`);
-            throw new Error('Vision model failed');
-        }
-
-        const data = await response.json();
-        console.log("Vision model response received");
-        
-        if (!data.choices?.[0]?.message?.content) {
-            throw new Error('Empty response from vision model');
-        }
-
-        const aiMessage = data.choices[0].message.content;
-        conversationHistory.push({ role: "user", content: `[Image uploaded] ${message}` });
-        conversationHistory.push({ role: "assistant", content: aiMessage });
-        appendMessage('ai', aiMessage);
-
-        // Reset image state
-        currentImage = null;
-        imageButton.style.backgroundColor = '';
-        imageButton.textContent = 'Add Image';
-        imageInput.value = '';
-    }
-
-    async function handleTextMessage(message) {
-        conversationHistory.push({ role: "user", content: message });
-        
-        let success = false;
-        let currentModelIndex = 0;
-
-        while (!success && currentModelIndex < models.length) {
-            const currentModel = models[currentModelIndex];
-            console.log(`Trying model (${currentModelIndex + 1}/${models.length}): ${currentModel}`);
-            
-            try {
-                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                    method: "POST",
-                    headers: {
-                        Authorization: `Bearer ${window.env.OPENROUTER_API_KEY}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        model: currentModel,
-                        messages: conversationHistory
-                    }),
-                });
-
-                if (!response.ok) {
-                    console.log(`Model ${currentModel} failed with status ${response.status}, trying next...`);
-                    currentModelIndex++;
-                    continue;
-                }
-
-                const data = await response.json();
-                console.log(`Successfully using model: ${currentModel}`);
-                const aiMessage = data.choices[0].message.content;
-                conversationHistory.push({ role: "assistant", content: aiMessage });
-                appendMessage('ai', aiMessage);
-                success = true;
-            } catch (error) {
-                console.error(`Error with model ${currentModel}:`, error);
-                currentModelIndex++;
-            }
-        }
-
-        if (!success) {
-            throw new Error('All models failed');
+            if (loadingDiv) loadingDiv.style.display = 'none';
         }
     }
 
     // Add message input handlers
-    sendButton.addEventListener('click', sendMessage);
+    sendButton.addEventListener('click', handleSendMessage);
     messageInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            sendMessage();
+            handleSendMessage();
         }
     });
 }); 
