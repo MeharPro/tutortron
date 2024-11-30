@@ -53,6 +53,7 @@ document.head.appendChild(highlightCSS);
 
 // Define available models in order of preference
 const FREE_MODELS = [
+    "meta-llama/llama-3.2-90b-vision-instruct:free",
     "google/learnlm-1.5-pro-experimental:free",
     "meta-llama/llama-3.1-405b-instruct:free",
     "liquid/lfm-40b:free",

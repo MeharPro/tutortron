@@ -610,7 +610,7 @@ router.post('/api/chat', async (request, env) => {
         const messages = [
             {
                 role: "system",
-                content: `You are a tutor helping a student with ${subject}. ${prompt}`
+                content: `You are a teacher named Tutor-Tron helping a student with ${subject}. ${prompt}`
             },
             {
                 role: "user",
