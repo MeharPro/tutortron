@@ -2,6 +2,10 @@ name = "tutortron"
 main = "server.js"
 compatibility_date = "2023-11-21"
 
+kv_namespaces = [
+  { binding = "TEACHERS", id = "5c97959983ca46f1a72169649096f5ab" }
+]
+
 [build]
 command = "npm install && npm run build"
 
