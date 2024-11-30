@@ -465,9 +465,21 @@ router.get('*', async (request, env) => {
 
             // Replace placeholders in tutor.html
             let content = decodeBase64(fileResults[0].content);
-            content = content.replace('{{SUBJECT}}', link.subject)
-                           .replace('{{PROMPT}}', link.prompt)
-                           .replace('{{MODE}}', link.mode);
+            
+            // Properly escape values for JavaScript
+            const escapedConfig = {
+                subject: link.subject.replace(/["\\]/g, '\\$&'),
+                prompt: link.prompt.replace(/["\\]/g, '\\$&'),
+                mode: link.mode.replace(/["\\]/g, '\\$&')
+            };
+
+            content = content.replace(
+                'window.TUTOR_CONFIG = {',
+                `window.TUTOR_CONFIG = {
+                    subject: "${escapedConfig.subject}",
+                    prompt: "${escapedConfig.prompt}",
+                    mode: "${escapedConfig.mode}"`
+            );
 
             return new Response(content, {
                 headers: { 'Content-Type': fileResults[0].content_type }
