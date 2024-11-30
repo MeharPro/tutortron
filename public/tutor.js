@@ -119,6 +119,9 @@ async function handleSendMessage() {
     
     isProcessing = true;
     showLoading();
+
+    // Display user message immediately
+    appendMessage('user', message);
     
     try {
         // Try each model until one works
@@ -177,8 +180,7 @@ async function handleSendMessage() {
             throw new Error('Failed to get response from any model');
         }
 
-        // Display messages
-        appendMessage('user', message);
+        // Display AI response
         appendMessage('ai', data.response);
         
         // Clear input

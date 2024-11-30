@@ -604,9 +604,7 @@ router.post('/api/chat', async (request, env) => {
                 role: "system",
                 content: `You are a teacher named Tutor-Tron helping a student with ${subject}. ${prompt}`
             },
-            // Include previous messages from history
             ...messageHistory,
-            // Add the new message
             {
                 role: "user",
                 content: image ? [
@@ -624,13 +622,8 @@ router.post('/api/chat', async (request, env) => {
             }
         ];
 
-        // Always use meta-llama/llama-3.2-90b-vision-instruct:free for image messages
-        const selectedModel = image ? 'meta-llama/llama-3.2-90b-vision-instruct:free' : model;
+        console.log('Sending messages to API:', JSON.stringify(messages)); // Debug log
 
-        console.log('Using model:', selectedModel); // Debug log
-        console.log('Messages:', JSON.stringify(messages)); // Debug log
-
-        // Make the API request
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -640,7 +633,7 @@ router.post('/api/chat', async (request, env) => {
                 'X-Title': 'Tutor-Tron'
             },
             body: JSON.stringify({
-                model: selectedModel,
+                model: model || FREE_MODELS[0], // Use first model if none specified
                 messages,
                 temperature: 0.7,
                 max_tokens: 1000
@@ -656,7 +649,10 @@ router.post('/api/chat', async (request, env) => {
         const data = await response.json();
         console.log('API Response:', data); // Debug log
 
-        // Return both the AI response and the updated message history
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+            throw new Error('Invalid response format from API');
+        }
+
         return new Response(JSON.stringify({
             response: data.choices[0].message.content,
             messageHistory: [
