@@ -75,42 +75,48 @@ router.post('/api/auth/login', async (request, env) => {
 
 router.post('/api/auth/register', async (request, env) => {
     try {
-        const { name, email, password, school } = await request.json();
-        
-        // Check if user exists
-        const existingUser = await env.TEACHERS.get(email);
-        if (existingUser) {
-            return new Response(JSON.stringify({ error: 'Email already registered' }), {
-                status: 409,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
-                }
+        const { name, email, password, school, accessCode } = await request.json();
+
+        // Validate access code
+        if (accessCode !== 'TEACH2024') {
+            return new Response(JSON.stringify({ error: 'Invalid access code' }), {
+                status: 403,
+                headers: { 'Content-Type': 'application/json' }
             });
         }
 
-        // Store user in KV
-        await env.TEACHERS.put(email, JSON.stringify({
+        // Check if user already exists
+        const existingUser = await env.TEACHERS.get(email);
+        if (existingUser) {
+            return new Response(JSON.stringify({ error: 'Email already registered' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Create new user
+        const token = crypto.randomUUID();
+        const user = {
             name,
             email,
-            password,
-            school
-        }));
+            password, // Note: In production, you should hash the password
+            school,
+            token,
+            links: []
+        };
 
-        return new Response(JSON.stringify({ success: true }), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+        // Store user data
+        await env.TEACHERS.put(email, JSON.stringify(user));
+        await env.TEACHERS.put(token, JSON.stringify(user));
+
+        return new Response(JSON.stringify({ token }), {
+            headers: { 'Content-Type': 'application/json' }
         });
     } catch (error) {
         console.error('Registration error:', error);
         return new Response(JSON.stringify({ error: 'Registration failed' }), {
             status: 500,
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
     }
 });
