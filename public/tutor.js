@@ -74,6 +74,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Set mode-specific styling
     document.body.classList.add(mode.toLowerCase());
     
+    // Get link ID from URL
+    const pathParts = window.location.pathname.split('/');
+    const linkId = pathParts[pathParts.length - 1];
+
     // Initialize conversation with the prompt and get first response
     if (prompt) {
         isProcessing = true;

@@ -63,44 +63,6 @@ html.codebreaker code[class*="language-"] {
     color: #d4d4d4 !important;
 }
 
-/* Syntax highlighting for code blocks */
-html.codebreaker .hljs {
-    background: #1e1e1e !important;
-    color: #808080 !important;
-}
-
-html.codebreaker .hljs-keyword {
-    color: #569cd6 !important;  /* blue for keywords */
-}
-
-html.codebreaker .hljs-built_in {
-    color: #4ec9b0 !important;  /* teal for built-in functions */
-}
-
-html.codebreaker .hljs-string {
-    color: #ce9178 !important;  /* orange for strings */
-}
-
-html.codebreaker .hljs-comment {
-    color: #6a9955 !important;  /* green for comments */
-}
-
-html.codebreaker .hljs-number {
-    color: #b5cea8 !important;  /* light green for numbers */
-}
-
-html.codebreaker .hljs-operator {
-    color: #d4d4d4 !important;  /* white for operators */
-}
-
-html.codebreaker .hljs-function {
-    color: #dcdcaa !important;  /* yellow for functions */
-}
-
-html.codebreaker .hljs-variable {
-    color: #9cdcfe !important;  /* light blue for variables */
-}
-
 /* Loading animation */
 html.codebreaker .loading-animation {
     background: #252526 !important;
@@ -136,4 +98,95 @@ html.codebreaker #copyButton:hover {
     background-color: #4a9d57 !important;
 }
 
-/* Remove all the token color overrides since they're handled in tutor.html now */ 
+/* Error container */
+html.codebreaker #errorContainer {
+    background-color: #252526 !important;
+    border: 1px solid #404040 !important;
+    color: #d4d4d4 !important;
+}
+
+html.codebreaker .error-message {
+    color: #f14c4c !important;
+}
+
+html.codebreaker .report-button {
+    background-color: #4d4d4d !important;
+    color: white !important;
+}
+
+html.codebreaker .report-button:hover {
+    background-color: #5a5a5a !important;
+}
+
+/* Floating error button */
+html.codebreaker .floating-error-button {
+    background-color: #4d4d4d !important;
+    color: white !important;
+}
+
+html.codebreaker .floating-error-button:hover {
+    background-color: #5a5a5a !important;
+}
+
+/* Code highlighting */
+html.codebreaker .hljs {
+    color: #d4d4d4 !important;
+}
+
+html.codebreaker .hljs-keyword {
+    color: #569cd6 !important;
+}
+
+html.codebreaker .hljs-built_in {
+    color: #4ec9b0 !important;
+}
+
+html.codebreaker .hljs-string {
+    color: #ce9178 !important;
+}
+
+html.codebreaker .hljs-comment {
+    color: #6a9955 !important;
+}
+
+html.codebreaker .hljs-number {
+    color: #b5cea8 !important;
+}
+
+html.codebreaker .hljs-operator {
+    color: #d4d4d4 !important;
+}
+
+html.codebreaker .hljs-function {
+    color: #dcdcaa !important;
+}
+
+html.codebreaker .hljs-variable {
+    color: #9cdcfe !important;
+}
+
+/* Ensure all text is properly colored */
+html.codebreaker * {
+    color: #d4d4d4 !important;
+}
+
+html.codebreaker h1,
+html.codebreaker h2,
+html.codebreaker h3,
+html.codebreaker h4,
+html.codebreaker h5,
+html.codebreaker h6,
+html.codebreaker p,
+html.codebreaker span,
+html.codebreaker div {
+    color: #d4d4d4 !important;
+}
+
+/* Override any other text colors */
+html.codebreaker .message strong,
+html.codebreaker .message em,
+html.codebreaker .message code,
+html.codebreaker .message pre {
+    color: #d4d4d4 !important;
+}
+ 
