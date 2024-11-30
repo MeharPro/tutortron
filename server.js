@@ -514,21 +514,46 @@ router.get('*', async (request, env) => {
         if (modeMatch) {
             const [, mode, id] = modeMatch;
             
-            // First try to get link from KV
-            let link = await env.TEACHERS.get(`link:${id}`, { type: 'json' });
+            // First try to get from D1
+            const { results } = await env.DB.prepare(`
+                SELECT * FROM links WHERE id = ?
+            `).bind(id).all();
 
-            if (!link) {
-                // If not found, try to find in user's links
-                const users = await env.TEACHERS.list({ prefix: '' });
-                for (const key of users.keys) {
-                    if (key.name === 'api_keys') continue;
-                    const user = await env.TEACHERS.get(key.name, { type: 'json' });
-                    if (user && user.links) {
-                        link = user.links.find(l => l.id === id);
-                        if (link) {
-                            // Store link separately for future quick access
-                            await env.TEACHERS.put(`link:${id}`, JSON.stringify(link));
-                            break;
+            let link;
+            if (results && results.length > 0) {
+                link = results[0];
+            } else {
+                // If not in D1, try KV
+                link = await env.TEACHERS.get(`link:${id}`, { type: 'json' });
+
+                if (!link) {
+                    // If not found in KV directly, try user's links
+                    const users = await env.TEACHERS.list({ prefix: '' });
+                    for (const key of users.keys) {
+                        if (key.name === 'api_keys') continue;
+                        const user = await env.TEACHERS.get(key.name, { type: 'json' });
+                        if (user && user.links) {
+                            const foundLink = user.links.find(l => l.id === id);
+                            if (foundLink) {
+                                link = foundLink;
+                                // Store in D1 for future access
+                                try {
+                                    await env.DB.prepare(`
+                                        INSERT INTO links (id, mode, subject, prompt, created_at, user_email)
+                                        VALUES (?, ?, ?, ?, ?, ?)
+                                    `).bind(
+                                        foundLink.id,
+                                        foundLink.mode,
+                                        foundLink.subject,
+                                        foundLink.prompt,
+                                        foundLink.created || foundLink.created_at,
+                                        user.email
+                                    ).run();
+                                } catch (error) {
+                                    console.error('Error migrating link to D1:', error);
+                                }
+                                break;
+                            }
                         }
                     }
                 }
