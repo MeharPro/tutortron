@@ -403,6 +403,24 @@ router.get('*', async (request, env) => {
                 });
             }
 
+            // Verify mode matches
+            if (link.mode.toLowerCase() !== mode.toLowerCase()) {
+                console.error(`Mode mismatch: URL has ${mode}, link has ${link.mode}`);
+                // Serve invalid-link.html
+                const { results: fileResults } = await env.DB.prepare(`
+                    SELECT content, content_type FROM files WHERE path = ?
+                `).bind('public/invalid-link.html').all();
+
+                if (!fileResults || fileResults.length === 0) {
+                    return new Response('Invalid link', { status: 404 });
+                }
+
+                const content = decodeBase64(fileResults[0].content);
+                return new Response(content, {
+                    headers: { 'Content-Type': fileResults[0].content_type }
+                });
+            }
+
             // Get tutor.html from D1
             const { results: fileResults } = await env.DB.prepare(`
                 SELECT content, content_type FROM files WHERE path = ?
@@ -412,7 +430,12 @@ router.get('*', async (request, env) => {
                 return new Response('File not found', { status: 404 });
             }
 
-            const content = decodeBase64(fileResults[0].content);
+            // Replace placeholders in tutor.html
+            let content = decodeBase64(fileResults[0].content);
+            content = content.replace('{{SUBJECT}}', link.subject)
+                            .replace('{{PROMPT}}', link.prompt)
+                            .replace('{{MODE}}', link.mode);
+
             return new Response(content, {
                 headers: { 'Content-Type': fileResults[0].content_type }
             });

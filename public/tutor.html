@@ -3,12 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tutor-Tron AI</title>
+    <title>Tutor-Tron AI - {{SUBJECT}}</title>
     <!-- Immediate mode detection and theme application -->
     <script>
+        window.TUTOR_CONFIG = {
+            subject: "{{SUBJECT}}",
+            prompt: "{{PROMPT}}",
+            mode: "{{MODE}}"
+        };
+        
         (function() {
-            const pathParts = window.location.pathname.split('/');
-            const mode = pathParts[pathParts.length - 2];
+            const mode = window.TUTOR_CONFIG.mode.toLowerCase();
             if (mode) {
                 document.documentElement.className = mode;
                 // Immediately set dark theme for codebreaker
@@ -465,49 +470,22 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1 id="modeTitle"><!-- Will be set by JavaScript --></h1>
-            <h2 id="subjectTitle"></h2>
+            <h1>Tutor-Tron AI</h1>
+            <div id="subjectTitle">{{SUBJECT}}</div>
         </div>
-        
         <div class="chat-container" id="chatContainer">
-            <!-- Messages will be appended here -->
+            <!-- Messages will be added here -->
         </div>
-
-        <div class="loading-animation" id="loading">
-            <div class="loading-text">
-                Tutor-Tron is thinking<span class="loading-dots"></span>
-            </div>
-        </div>
-
         <div class="input-section">
             <div class="input-container">
-                <textarea 
-                    id="messageInput" 
-                    placeholder="Ask your question here..."
-                    rows="3"
-                ></textarea>
+                <textarea id="messageInput" placeholder="Type your message here..." rows="1"></textarea>
                 <button id="sendMessage">Send</button>
             </div>
-
             <div class="button-group">
-                <button id="speakButton">
-                    <span>🔊</span> Speak Response
-                </button>
-                <button id="copyButton">
-                    <span>📋</span> Copy Chat
-                </button>
+                <button id="speakButton">🔊 Speak</button>
+                <button id="copyButton">📋 Copy</button>
             </div>
         </div>
-
-        <div id="errorContainer" style="display: none;">
-            <div class="error-message"></div>
-            <button id="reportError" class="report-button">
-                Report Error
-            </button>
-        </div>
-    </div>
-    <div id="floatingErrorButton" class="floating-error-button">
-        Report Console Errors
     </div>
 </body>
 </html> 

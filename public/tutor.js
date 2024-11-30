@@ -57,6 +57,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     let isProcessing = false;
     let mathJaxReady = false;
 
+    // Get configuration from window.TUTOR_CONFIG
+    const { subject, prompt, mode } = window.TUTOR_CONFIG;
+    
+    // Set mode-specific styling
+    document.body.classList.add(mode.toLowerCase());
+    
+    // Initialize conversation with the prompt
+    if (prompt) {
+        const systemMessage = {
+            role: "system",
+            content: `You are a tutor helping a student with ${subject}. ${prompt}`
+        };
+        conversationHistory.push(systemMessage);
+        
+        // Display welcome message
+        appendMessage('ai', `Welcome! I'm here to help you with ${subject}. Let's begin!`);
+    }
+
     // Error tracking setup
     const originalConsoleError = console.error;
     console.error = function() {
@@ -73,16 +91,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             button.classList.remove('has-errors');
         }
     }
-
-    // Get path info and set mode
-    const pathParts = window.location.pathname.split('/');
-    const mode = pathParts[pathParts.length - 2];
-    const linkId = pathParts[pathParts.length - 1];
-
-    // Set mode-specific styling
-    document.body.classList.add(mode);
-    document.getElementById('modeTitle').textContent = 
-        `${mode.charAt(0).toUpperCase() + mode.slice(1)} - Tutor-Tron`;
 
     // Create image input elements
     const imageInput = document.createElement('input');
