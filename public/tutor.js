@@ -2,22 +2,34 @@ console.log('tutor.js loaded');
         // Add MathJax configuration
         window.MathJax = {
             tex: {
-                inlineMath: [['$', '$']],
-                displayMath: [['$$', '$$']],
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
                 processEscapes: true,
+                processEnvironments: true,
                 packages: ['base', 'ams', 'noerrors', 'noundefined']
             },
             options: {
-                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
             },
             startup: {
                 ready: () => {
                     console.log('MathJax is ready');
                     MathJax.startup.defaultReady();
                     mathJaxReady = true;
+                    // Typeset any existing math content
+                    MathJax.typesetPromise().catch((err) => console.error('MathJax typeset error:', err));
                 }
             }
         };
+
+// Load MathJax
+const script = document.createElement('script');
+script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+script.async = true;
+
+document.head.appendChild(script);
 
 // Load highlight.js
 const highlightScript = document.createElement('script');
@@ -388,7 +400,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Function to format content with math and code highlighting
+    // Function to format content with MathJax and code highlighting
     function formatMathContent(content) {
         // Language aliases mapping
         const languageAliases = {
@@ -421,15 +433,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Handle LaTeX delimiters
         content = content
             .replace(/\\\((.*?)\\\)/g, '$ $1 $')
-            .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$');
+            .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$')
+            .replace(/\$\$([\s\S]*?)\$\$/g, (match, tex) => {
+                return `<div class="math-display">$$ ${tex.trim()} $$</div>`;
+            })
+            .replace(/\$(.*?)\$/g, (match, tex) => {
+                return `<span class="math-inline">$ ${tex.trim()} $</span>`;
+            });
 
         // Format bullet points
         content = content.replace(/^\* /gm, '• ');
 
         // Format headers
-        content = content.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
-        content = content.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
-        content = content.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
+        content = content
+            .replace(/^# (.*?)$/gm, '<h1>$1</h1>')
+            .replace(/^## (.*?)$/gm, '<h2>$1</h2>')
+            .replace(/^### (.*?)$/gm, '<h3>$1</h3>');
 
         // Handle general formatting
         content = content
@@ -515,4 +534,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     `;
     document.head.appendChild(imageButtonStyle);
+
+    // Add MathJax styles
+    const mathJaxStyle = document.createElement('style');
+    mathJaxStyle.textContent = `
+        .math-display {
+            overflow-x: auto;
+            margin: 1em 0;
+            padding: 1em;
+            background: rgba(0, 0, 0, 0.03);
+            border-radius: 4px;
+        }
+        
+        .math-inline {
+            padding: 0 0.2em;
+        }
+        
+        .message .MathJax {
+            color: inherit;
+        }
+    `;
+    document.head.appendChild(mathJaxStyle);
 }); 
