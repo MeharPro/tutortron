@@ -191,8 +191,8 @@ router.get('/api/links', async (request, env) => {
             });
         }
 
-        // Get links from user object
-        const links = user.links || [];
+        // Get links from KV
+        const links = await env.TEACHERS.get(`links:${user.email}`, { type: 'json' }) || [];
 
         return new Response(JSON.stringify(links), {
             headers: { 
@@ -249,17 +249,18 @@ router.post('/api/links', async (request, env) => {
             mode,
             subject,
             prompt,
-            created: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            teacher_email: user.email
         };
 
-        // Add link to user's links array
-        if (!user.links) {
-            user.links = [];
-        }
-        user.links.unshift(link);
+        // Get existing links
+        const existingLinks = await env.TEACHERS.get(`links:${user.email}`, { type: 'json' }) || [];
+        
+        // Add new link
+        existingLinks.unshift(link);
 
-        // Update user in KV
-        await env.TEACHERS.put(user.email, JSON.stringify(user));
+        // Store updated links
+        await env.TEACHERS.put(`links:${user.email}`, JSON.stringify(existingLinks));
 
         // Store individual link for quick access
         await env.TEACHERS.put(`link:${id}`, JSON.stringify(link));
@@ -294,25 +295,8 @@ router.get('/api/links/:id', async (request, env) => {
         const url = new URL(request.url);
         const id = url.pathname.split('/').pop();
         
-        // First try to get link from KV
-        let link = await env.TEACHERS.get(`link:${id}`, { type: 'json' });
-
-        if (!link) {
-            // If not found, try to find in user's links
-            const users = await env.TEACHERS.list({ prefix: '' });
-            for (const key of users.keys) {
-                if (key.name === 'api_keys') continue;
-                const user = await env.TEACHERS.get(key.name, { type: 'json' });
-                if (user && user.links) {
-                    link = user.links.find(l => l.id === id);
-                    if (link) {
-                        // Store link separately for future quick access
-                        await env.TEACHERS.put(`link:${id}`, JSON.stringify(link));
-                        break;
-                    }
-                }
-            }
-        }
+        // Get link from KV
+        const link = await env.TEACHERS.get(`link:${id}`, { type: 'json' });
 
         if (!link) {
             return new Response(JSON.stringify({ error: 'Link not found' }), {
@@ -367,40 +351,54 @@ router.get('*', async (request, env) => {
         if (modeMatch) {
             const [, mode, id] = modeMatch;
             
-            // First try to get link from KV
-            let link = await env.TEACHERS.get(`link:${id}`, { type: 'json' });
-
+            // Check if link exists
+            const link = await env.TEACHERS.get(`link:${id}`, { type: 'json' });
             if (!link) {
-                // If not found, try to find in user's links
-                const users = await env.TEACHERS.list({ prefix: '' });
-                for (const key of users.keys) {
-                    if (key.name === 'api_keys') continue;
-                    const user = await env.TEACHERS.get(key.name, { type: 'json' });
-                    if (user && user.links) {
-                        link = user.links.find(l => l.id === id);
-                        if (link) {
-                            // Store link separately for future quick access
-                            await env.TEACHERS.put(`link:${id}`, JSON.stringify(link));
-                            break;
-                        }
+                // If link not found in KV, check old links in D1
+                const { results } = await env.DB.prepare(`
+                    SELECT * FROM links WHERE id = ?
+                `).bind(id).all();
+
+                if (!results || results.length === 0) {
+                    // Serve invalid-link.html
+                    const { results: fileResults } = await env.DB.prepare(`
+                        SELECT content, content_type FROM files WHERE path = ?
+                    `).bind('public/invalid-link.html').all();
+
+                    if (!fileResults || fileResults.length === 0) {
+                        return new Response('Invalid link', { status: 404 });
                     }
-                }
-            }
 
-            if (!link) {
-                // Serve invalid-link.html
-                const { results: fileResults } = await env.DB.prepare(`
-                    SELECT content, content_type FROM files WHERE path = ?
-                `).bind('public/invalid-link.html').all();
-
-                if (!fileResults || fileResults.length === 0) {
-                    return new Response('Invalid link', { status: 404 });
+                    const content = decodeBase64(fileResults[0].content);
+                    return new Response(content, {
+                        headers: { 'Content-Type': fileResults[0].content_type }
+                    });
                 }
 
-                const content = decodeBase64(fileResults[0].content);
-                return new Response(content, {
-                    headers: { 'Content-Type': fileResults[0].content_type }
-                });
+                // Found in D1, store in KV for future use
+                const oldLink = results[0];
+                await env.TEACHERS.put(`link:${id}`, JSON.stringify({
+                    id: oldLink.id,
+                    mode: oldLink.mode,
+                    subject: oldLink.subject,
+                    prompt: oldLink.prompt,
+                    created_at: oldLink.created_at,
+                    teacher_email: oldLink.teacher_email
+                }));
+
+                // Add to teacher's links list
+                const existingLinks = await env.TEACHERS.get(`links:${oldLink.teacher_email}`, { type: 'json' }) || [];
+                if (!existingLinks.find(l => l.id === oldLink.id)) {
+                    existingLinks.push({
+                        id: oldLink.id,
+                        mode: oldLink.mode,
+                        subject: oldLink.subject,
+                        prompt: oldLink.prompt,
+                        created_at: oldLink.created_at,
+                        teacher_email: oldLink.teacher_email
+                    });
+                    await env.TEACHERS.put(`links:${oldLink.teacher_email}`, JSON.stringify(existingLinks));
+                }
             }
 
             // Get tutor.html from D1
