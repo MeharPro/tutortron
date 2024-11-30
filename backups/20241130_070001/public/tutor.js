@@ -80,32 +80,40 @@ function resetModelIndex() {
     currentModelIndex = 0;
 }
 
-// At the top level, keep only one message history variable
-let messageHistory = [];
-
-// Remove the sendMessage function and keep only handleSendMessage
-async function handleSendMessage() {
+// Modify sendMessage function to use sequential models
+async function sendMessage() {
     if (isProcessing) return;
     
     const messageInput = document.getElementById('messageInput');
     const message = messageInput.value.trim();
+    const imageUpload = document.getElementById('imageUpload');
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
     
-    if (!message) return;
+    if (!message && (!imageUpload || !imageUpload.files[0])) return;
     
     isProcessing = true;
     showLoading();
     
     try {
+        let imageBase64 = null;
+        if (imageUpload && imageUpload.files[0]) {
+            imageBase64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+                reader.readAsDataURL(imageUpload.files[0]);
+            });
+        }
+
         // Try each model until one works
-        let success = false;
+        let response;
         let data;
-        
+        let success = false;
+
         while (!success && currentModelIndex < FREE_MODELS.length) {
             try {
-                const model = FREE_MODELS[currentModelIndex];
-                console.log('Trying model:', model);
+                const model = imageBase64 ? VISION_MODEL : FREE_MODELS[currentModelIndex];
                 
-                const response = await fetch('/api/chat', {
+                response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -116,53 +124,44 @@ async function handleSendMessage() {
                         prompt: window.TUTOR_CONFIG.prompt,
                         mode: window.TUTOR_CONFIG.mode,
                         model,
-                        messageHistory
+                        image: imageBase64
                     })
                 });
 
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    console.error('API Error:', response.status, errorData);
-                    throw new Error(`API returned ${response.status}`);
+                if (response.ok) {
+                    data = await response.json();
+                    success = true;
+                    resetModelIndex(); // Reset to first model on success
+                } else {
+                    currentModelIndex++; // Try next model
                 }
-
-                data = await response.json();
-                if (!data || !data.response) {
-                    console.error('Invalid API response:', data);
-                    throw new Error('Invalid API response format');
-                }
-
-                // Update message history with the new response
-                messageHistory = data.messageHistory || messageHistory;
-                
-                success = true;
-                currentModelIndex = 0; // Reset on success
-                
             } catch (error) {
                 console.error(`Error with model ${FREE_MODELS[currentModelIndex]}:`, error);
-                currentModelIndex++;
-                
-                if (currentModelIndex >= FREE_MODELS.length) {
-                    throw new Error('All models failed');
-                }
+                currentModelIndex++; // Try next model
             }
         }
 
         if (!success) {
-            throw new Error('Failed to get response from any model');
+            throw new Error('All models failed to respond');
         }
 
-        // Display messages
-        appendMessage('user', message);
-        appendMessage('ai', data.response);
+        appendMessage(message, 'user');
+        if (imageBase64) {
+            appendImageMessage(imageUpload.files[0]);
+        }
+        appendMessage(data.response, 'ai');
         
-        // Clear input
+        // Clear input and image
         messageInput.value = '';
+        if (imageUpload) {
+            imageUpload.value = '';
+            imagePreviewContainer.style.display = 'none';
+        }
         
     } catch (error) {
-        console.error('Error getting AI response:', error);
-        showError('Failed to get response. Please try again.');
-        currentModelIndex = 0; // Reset index after all attempts fail
+        console.error('Error:', error);
+        showError('Failed to send message. Please try again.');
+        currentModelIndex = 0; // Reset index after all models fail
     } finally {
         isProcessing = false;
         hideLoading();
@@ -179,6 +178,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const loadingDiv = document.getElementById('loading');
     
     // State variables
+    const conversationHistory = [];
     let currentImage = null;
     let isSpeaking = false;
     let currentSpeech = null;
@@ -221,7 +221,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 role: "system",
                 content: `You are a tutor helping a student with ${subject}. ${prompt}`
             };
-            messageHistory.push(systemMessage);
+            conversationHistory.push(systemMessage);
 
             // Initial API call
             const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -234,7 +234,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 },
                 body: JSON.stringify({
                     model: FREE_MODELS[currentModelIndex], // Always use first model for initial message
-                    messages: messageHistory,
+                    messages: conversationHistory,
                     temperature: 0.7,
                     max_tokens: 400
                 })
@@ -272,7 +272,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 throw new Error('No response content from AI');
             }
 
-            // Just display the AI's response
+            // Add AI's response to conversation history
+            conversationHistory.push({
+                role: "assistant",
+                content: aiMessage
+            });
+
+            // Display the AI's response
             appendMessage('ai', aiMessage);
         } catch (error) {
             console.error('Full error details:', error);
@@ -329,7 +335,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 appendMessage('user', base64Image);
 
                 // Add to conversation history
-                messageHistory.push({
+                conversationHistory.push({
                     role: "user",
                     content: [
                         {
@@ -356,6 +362,88 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
     */
+
+    // Update handleSendMessage to handle image messages
+    async function handleSendMessage() {
+        if (isProcessing) return;
+        
+        const messageInput = document.getElementById('messageInput');
+        const message = messageInput.value.trim();
+        
+        if (!message) return;
+        
+        isProcessing = true;
+        showLoading();
+        
+        try {
+            // Try each model until one works
+            let success = false;
+            let data;
+            
+            while (!success && currentModelIndex < FREE_MODELS.length) {
+                try {
+                    const model = FREE_MODELS[currentModelIndex];
+                    console.log('Trying model:', model); // Debug log
+                    
+                    const response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message,
+                            subject: window.TUTOR_CONFIG.subject,
+                            prompt: window.TUTOR_CONFIG.prompt,
+                            mode: window.TUTOR_CONFIG.mode,
+                            model
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        console.error('API Error:', response.status, errorData); // Debug log
+                        throw new Error(`API returned ${response.status}`);
+                    }
+
+                    data = await response.json();
+                    if (!data || !data.response) {
+                        console.error('Invalid API response:', data); // Debug log
+                        throw new Error('Invalid API response format');
+                    }
+
+                    success = true;
+                    currentModelIndex = 0; // Reset on success
+                    
+                } catch (error) {
+                    console.error(`Error with model ${FREE_MODELS[currentModelIndex]}:`, error);
+                    currentModelIndex++;
+                    
+                    if (currentModelIndex >= FREE_MODELS.length) {
+                        throw new Error('All models failed');
+                    }
+                }
+            }
+
+            if (!success) {
+                throw new Error('Failed to get response from any model');
+            }
+
+            // Display messages
+            appendMessage(message, 'user');
+            appendMessage(data.response, 'ai');
+            
+            // Clear input
+            messageInput.value = '';
+            
+        } catch (error) {
+            console.error('Error getting AI response:', error);
+            showError('Failed to get response. Please try again.');
+            currentModelIndex = 0; // Reset index after all attempts fail
+        } finally {
+            isProcessing = false;
+            hideLoading();
+        }
+    }
 
     // Add message input handlers
     sendButton.addEventListener('click', handleSendMessage);
@@ -405,9 +493,31 @@ document.addEventListener("DOMContentLoaded", async () => {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}-message`;
         
+        // Check for image URLs in the content
+        const imageUrlMatch = content.match(/https?:\/\/[^\s<>"]+?\.(?:jpg|jpeg|gif|png|webp)(?:\?[^\s<>"]+)?/gi);
+        
+        if (imageUrlMatch) {
+            // Remove image URLs from content
+            imageUrlMatch.forEach(url => {
+                content = content.replace(url, '');
+                // Create and append image element
+                const img = document.createElement('img');
+                img.src = url;
+                img.alt = 'Generated image';
+                img.className = 'generated-image';
+                // Add click handler for image expansion
+                img.onclick = (e) => {
+                    e.stopPropagation();
+                    modal.innerHTML = `<img src="${url}" alt="Expanded image">`;
+                    modal.style.display = 'flex';
+                };
+                messageDiv.appendChild(img);
+            });
+        }
+        
         // Format content with MathJax and code highlighting
         const formattedContent = formatMathContent(content);
-        messageDiv.innerHTML = formattedContent;
+        messageDiv.innerHTML += formattedContent;
         
         chatContainer.appendChild(messageDiv);
         chatContainer.scrollTop = chatContainer.scrollHeight;

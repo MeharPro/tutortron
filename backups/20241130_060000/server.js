@@ -205,14 +205,48 @@ router.get('/api/links', async (request, env) => {
             });
         }
 
-        // Get links from D1, ordered by creation date
-        const { results } = await env.DB.prepare(`
+        // Get links from D1
+        const { results: d1Links } = await env.DB.prepare(`
             SELECT * FROM links 
             WHERE user_email = ? 
             ORDER BY created_at DESC
         `).bind(user.email).all();
 
-        return new Response(JSON.stringify(results || []), {
+        // Get links from KV
+        const kvLinks = user.links || [];
+
+        // Combine and deduplicate links
+        const allLinks = [...d1Links];
+        for (const kvLink of kvLinks) {
+            if (!allLinks.some(link => link.id === kvLink.id)) {
+                // Store KV link in D1 for future access
+                try {
+                    await env.DB.prepare(`
+                        INSERT INTO links (id, mode, subject, prompt, created_at, user_email)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    `).bind(
+                        kvLink.id,
+                        kvLink.mode,
+                        kvLink.subject,
+                        kvLink.prompt,
+                        kvLink.created || kvLink.created_at,
+                        user.email
+                    ).run();
+                } catch (error) {
+                    console.error('Error migrating KV link to D1:', error);
+                }
+                allLinks.push(kvLink);
+            }
+        }
+
+        // Sort by created date
+        allLinks.sort((a, b) => {
+            const dateA = new Date(a.created_at || a.created);
+            const dateB = new Date(b.created_at || b.created);
+            return dateB - dateA;
+        });
+
+        return new Response(JSON.stringify(allLinks), {
             headers: { 'Content-Type': 'application/json' }
         });
     } catch (error) {
@@ -224,7 +258,7 @@ router.get('/api/links', async (request, env) => {
     }
 });
 
-// Create a new link
+// Create link endpoint
 router.post('/api/links', async (request, env) => {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -256,31 +290,35 @@ router.post('/api/links', async (request, env) => {
 
         // Create new link
         const id = crypto.randomUUID();
-        const link = {
+        const created = new Date().toISOString();
+        
+        // Store in D1
+        await env.DB.prepare(`
+            INSERT INTO links (id, mode, subject, prompt, created_at, user_email)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(
             id,
+            mode,
             subject,
             prompt,
+            created,
+            user.email
+        ).run();
+
+        const link = {
+            id,
             mode,
-            created_at: new Date().toISOString(),
+            subject,
+            prompt,
+            created,
             user_email: user.email
         };
 
-        // Store in D1
-        await env.DB.prepare(`
-            INSERT INTO links (id, subject, prompt, mode, created_at, user_email)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `).bind(
-            link.id,
-            link.subject,
-            link.prompt,
-            link.mode,
-            link.created_at,
-            link.user_email
-        ).run();
-
-        // Update user's links in KV
-        if (!user.links) user.links = [];
-        user.links.push(link);
+        // Also store in KV for backward compatibility
+        if (!user.links) {
+            user.links = [];
+        }
+        user.links.unshift(link);
         await env.TEACHERS.put(token, JSON.stringify(user));
 
         return new Response(JSON.stringify(link), {
@@ -551,6 +589,93 @@ router.get('*', async (request, env) => {
         return new Response(`Internal Server Error: ${error.message}`, { 
             status: 500,
             headers: { 'Content-Type': 'text/plain' }
+        });
+    }
+});
+
+// Chat endpoint
+router.post('/api/chat', async (request, env) => {
+    try {
+        const { message, subject, prompt, mode, model, image } = await request.json();
+        
+        // Prepare the API request
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+            'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+            'X-Title': 'Tutor-Tron'
+        };
+
+        // Prepare the messages array
+        const messages = [
+            {
+                role: "system",
+                content: `You are a teacher named Tutor-Tron helping a student with ${subject}. ${prompt}`
+            },
+            {
+                role: "user",
+                content: image ? [
+                    {
+                        type: "text",
+                        text: message || "Please help me understand this."
+                    },
+                    {
+                        type: "image_url",
+                        image_url: {
+                            url: `data:image/jpeg;base64,${image}`
+                        }
+                    }
+                ] : message
+            }
+        ];
+
+        // Always use meta-llama/llama-3.2-90b-vision-instruct:free for image messages
+        const selectedModel = image ? 'meta-llama/llama-3.2-90b-vision-instruct:free' : model;
+
+        console.log('Using model:', selectedModel); // Debug log
+        console.log('Messages:', JSON.stringify(messages)); // Debug log
+
+        // Make the API request
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                model: selectedModel,
+                messages,
+                temperature: 0.7,
+                max_tokens: 1000
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            console.error('OpenRouter API error:', error);
+            throw new Error(`OpenRouter API error: ${JSON.stringify(error)}`);
+        }
+
+        const data = await response.json();
+        console.log('API Response:', data); // Debug log
+
+        return new Response(JSON.stringify({
+            response: data.choices[0].message.content
+        }), {
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+
+    } catch (error) {
+        console.error('Chat error:', error);
+        return new Response(JSON.stringify({ 
+            error: 'Failed to get AI response',
+            details: error.message
+        }), {
+            status: 500,
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
         });
     }
 });

@@ -75,42 +75,48 @@ router.post('/api/auth/login', async (request, env) => {
 
 router.post('/api/auth/register', async (request, env) => {
     try {
-        const { name, email, password, school } = await request.json();
-        
-        // Check if user exists
-        const existingUser = await env.TEACHERS.get(email);
-        if (existingUser) {
-            return new Response(JSON.stringify({ error: 'Email already registered' }), {
-                status: 409,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
-                }
+        const { name, email, password, school, accessCode } = await request.json();
+
+        // Validate access code
+        if (accessCode !== 'TEACH2024') {
+            return new Response(JSON.stringify({ error: 'Invalid access code' }), {
+                status: 403,
+                headers: { 'Content-Type': 'application/json' }
             });
         }
 
-        // Store user in KV
-        await env.TEACHERS.put(email, JSON.stringify({
+        // Check if user already exists
+        const existingUser = await env.TEACHERS.get(email);
+        if (existingUser) {
+            return new Response(JSON.stringify({ error: 'Email already registered' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Create new user
+        const token = crypto.randomUUID();
+        const user = {
             name,
             email,
-            password,
-            school
-        }));
+            password, // Note: In production, you should hash the password
+            school,
+            token,
+            links: []
+        };
 
-        return new Response(JSON.stringify({ success: true }), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+        // Store user data
+        await env.TEACHERS.put(email, JSON.stringify(user));
+        await env.TEACHERS.put(token, JSON.stringify(user));
+
+        return new Response(JSON.stringify({ token }), {
+            headers: { 'Content-Type': 'application/json' }
         });
     } catch (error) {
         console.error('Registration error:', error);
         return new Response(JSON.stringify({ error: 'Registration failed' }), {
             status: 500,
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
     }
 });
@@ -141,71 +147,73 @@ router.get('/api/auth/verify', async (request, env) => {
     });
 });
 
+// API keys endpoint
 router.get('/api/keys', async (request, env) => {
     try {
-        // Get API keys from KV
-        const keys = await env.TEACHERS.get('api_keys', { type: 'json' });
-        
-        if (!keys) {
-            return new Response(JSON.stringify({ error: 'No API keys found' }), {
-                status: 404,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
-                }
+        // First try D1
+        const { results } = await env.DB.prepare(`
+            SELECT key_value FROM api_keys WHERE key_name = 'OPENROUTER_API_KEY'
+        `).all();
+
+        if (results && results.length > 0) {
+            return new Response(JSON.stringify({
+                OPENROUTER_API_KEY: results[0].key_value
+            }), {
+                headers: { 'Content-Type': 'application/json' }
             });
         }
 
-        return new Response(JSON.stringify(keys), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+        // Fallback to environment variable
+        if (env.OPENROUTER_API_KEY) {
+            return new Response(JSON.stringify({
+                OPENROUTER_API_KEY: env.OPENROUTER_API_KEY
+            }), {
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        return new Response(JSON.stringify({ error: 'API key not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
         });
     } catch (error) {
         console.error('Error fetching API keys:', error);
-        return new Response(JSON.stringify({ 
-            error: 'Failed to fetch API keys',
-            message: error.message
-        }), {
+        return new Response(JSON.stringify({ error: 'Failed to fetch API keys' }), {
             status: 500,
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
     }
 });
 
-// Get all links for a teacher
+// Get links endpoint
 router.get('/api/links', async (request, env) => {
     try {
-        const user = await authenticate(request, env);
-        if (!user) {
-            console.error('No authenticated user found');
+        const token = request.headers.get('Authorization')?.split(' ')[1];
+        if (!token) {
             return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                 status: 401,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
-                }
+                headers: { 'Content-Type': 'application/json' }
             });
         }
 
-        console.log('Getting links for user:', user.email);
+        // Get user from token
+        const user = await env.TEACHERS.get(token, { type: 'json' });
+        if (!user) {
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
 
         // Get links from D1
-        const d1Result = await env.DB.prepare(`
-            SELECT * FROM links WHERE user_email = ? ORDER BY created_at DESC
+        const { results: d1Links } = await env.DB.prepare(`
+            SELECT * FROM links 
+            WHERE user_email = ? 
+            ORDER BY created_at DESC
         `).bind(user.email).all();
-        
-        console.log('D1 query result:', d1Result);
-        const d1Links = d1Result.results || [];
-        console.log('D1 links:', d1Links);
 
         // Get links from KV
         const kvLinks = user.links || [];
-        console.log('KV links:', kvLinks);
 
         // Combine and deduplicate links
         const allLinks = [...d1Links];
@@ -230,7 +238,6 @@ router.get('/api/links', async (request, env) => {
                 allLinks.push(kvLink);
             }
         }
-        console.log('Combined links:', allLinks);
 
         // Sort by created date
         allLinks.sort((a, b) => {
@@ -240,57 +247,48 @@ router.get('/api/links', async (request, env) => {
         });
 
         return new Response(JSON.stringify(allLinks), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
     } catch (error) {
-        console.error('Error fetching links:', error);
-        console.error('Error stack:', error.stack);
-        return new Response(JSON.stringify({ 
-            error: 'Failed to fetch links',
-            message: error.message,
-            stack: error.stack,
-            cause: error.cause
-        }), {
+        console.error('Error getting links:', error);
+        return new Response(JSON.stringify({ error: 'Failed to get links' }), {
             status: 500,
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
     }
 });
 
-// Create a new link
+// Create link endpoint
 router.post('/api/links', async (request, env) => {
     try {
-        const user = await authenticate(request, env);
+        const token = request.headers.get('Authorization')?.split(' ')[1];
+        if (!token) {
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Get user from token
+        const user = await env.TEACHERS.get(token, { type: 'json' });
         if (!user) {
             return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                 status: 401,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
-                }
+                headers: { 'Content-Type': 'application/json' }
             });
         }
 
-        const { mode, subject, prompt } = await request.json();
+        // Get link data from request
+        const { subject, prompt, mode } = await request.json();
         
-        if (!mode || !subject || !prompt) {
-            return new Response(JSON.stringify({ 
-                error: 'Missing required fields' 
-            }), {
+        if (!subject || !prompt || !mode) {
+            return new Response(JSON.stringify({ error: 'Missing required fields' }), {
                 status: 400,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
-                }
+                headers: { 'Content-Type': 'application/json' }
             });
         }
 
+        // Create new link
         const id = crypto.randomUUID();
         const created = new Date().toISOString();
         
@@ -321,30 +319,16 @@ router.post('/api/links', async (request, env) => {
             user.links = [];
         }
         user.links.unshift(link);
-        await env.TEACHERS.put(user.email, JSON.stringify(user));
-        await env.TEACHERS.put(`link:${id}`, JSON.stringify(link));
+        await env.TEACHERS.put(token, JSON.stringify(user));
 
-        return new Response(JSON.stringify({ 
-            success: true,
-            link
-        }), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+        return new Response(JSON.stringify(link), {
+            headers: { 'Content-Type': 'application/json' }
         });
     } catch (error) {
         console.error('Error creating link:', error);
-        return new Response(JSON.stringify({ 
-            error: 'Failed to create link',
-            message: error.message,
-            stack: error.stack
-        }), {
+        return new Response(JSON.stringify({ error: 'Failed to create link' }), {
             status: 500,
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
     }
 });
@@ -605,6 +589,93 @@ router.get('*', async (request, env) => {
         return new Response(`Internal Server Error: ${error.message}`, { 
             status: 500,
             headers: { 'Content-Type': 'text/plain' }
+        });
+    }
+});
+
+// Chat endpoint
+router.post('/api/chat', async (request, env) => {
+    try {
+        const { message, subject, prompt, mode, model, image } = await request.json();
+        
+        // Prepare the API request
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+            'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+            'X-Title': 'Tutor-Tron'
+        };
+
+        // Prepare the messages array
+        const messages = [
+            {
+                role: "system",
+                content: `You are a teacher named Tutor-Tron helping a student with ${subject}. ${prompt}`
+            },
+            {
+                role: "user",
+                content: image ? [
+                    {
+                        type: "text",
+                        text: message || "Please help me understand this."
+                    },
+                    {
+                        type: "image_url",
+                        image_url: {
+                            url: `data:image/jpeg;base64,${image}`
+                        }
+                    }
+                ] : message
+            }
+        ];
+
+        // Always use meta-llama/llama-3.2-90b-vision-instruct:free for image messages
+        const selectedModel = image ? 'meta-llama/llama-3.2-90b-vision-instruct:free' : model;
+
+        console.log('Using model:', selectedModel); // Debug log
+        console.log('Messages:', JSON.stringify(messages)); // Debug log
+
+        // Make the API request
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                model: selectedModel,
+                messages,
+                temperature: 0.7,
+                max_tokens: 1000
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            console.error('OpenRouter API error:', error);
+            throw new Error(`OpenRouter API error: ${JSON.stringify(error)}`);
+        }
+
+        const data = await response.json();
+        console.log('API Response:', data); // Debug log
+
+        return new Response(JSON.stringify({
+            response: data.choices[0].message.content
+        }), {
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+
+    } catch (error) {
+        console.error('Chat error:', error);
+        return new Response(JSON.stringify({ 
+            error: 'Failed to get AI response',
+            details: error.message
+        }), {
+            status: 500,
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
         });
     }
 });

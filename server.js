@@ -596,22 +596,17 @@ router.get('*', async (request, env) => {
 // Chat endpoint
 router.post('/api/chat', async (request, env) => {
     try {
-        const { message, subject, prompt, mode, model, image } = await request.json();
+        const { message, subject, prompt, mode, model, image, messageHistory = [] } = await request.json();
         
-        // Prepare the API request
-        const headers = {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
-            'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
-            'X-Title': 'Tutor-Tron'
-        };
-
-        // Prepare the messages array
+        // Prepare the messages array with history
         const messages = [
             {
                 role: "system",
                 content: `You are a teacher named Tutor-Tron helping a student with ${subject}. ${prompt}`
             },
+            // Include previous messages from history
+            ...messageHistory,
+            // Add the new message
             {
                 role: "user",
                 content: image ? [
@@ -638,7 +633,12 @@ router.post('/api/chat', async (request, env) => {
         // Make the API request
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
-            headers,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+                'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+                'X-Title': 'Tutor-Tron'
+            },
             body: JSON.stringify({
                 model: selectedModel,
                 messages,
@@ -656,8 +656,14 @@ router.post('/api/chat', async (request, env) => {
         const data = await response.json();
         console.log('API Response:', data); // Debug log
 
+        // Return both the AI response and the updated message history
         return new Response(JSON.stringify({
-            response: data.choices[0].message.content
+            response: data.choices[0].message.content,
+            messageHistory: [
+                ...messageHistory,
+                { role: "user", content: message },
+                { role: "assistant", content: data.choices[0].message.content }
+            ]
         }), {
             headers: { 
                 'Content-Type': 'application/json',

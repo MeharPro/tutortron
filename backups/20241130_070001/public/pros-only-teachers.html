@@ -4,88 +4,69 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tutor-Tron - Teacher Dashboard</title>
-    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #4F46E5;
+            --secondary-color: #818CF8;
+            --background-color: #F3F4F6;
+            --text-color: #1F2937;
+            --success-color: #059669;
+            --error-color: #DC2626;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
         .prompt-form {
             background: white;
             padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             margin-bottom: 2rem;
-        }
-
-        .generated-links {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-        }
-
-        .link-card {
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            background: var(--background-color);
-        }
-
-        .link-card h3 {
-            margin: 0 0 0.5rem 0;
-            color: var(--primary-color);
-        }
-
-        .link-url {
-            background: #f1f5f9;
-            padding: 0.5rem;
-            border-radius: 4px;
-            font-family: monospace;
-            margin: 0.5rem 0;
-            word-break: break-all;
-        }
-
-        .copy-link-btn {
-            background-color: #059669;
-            padding: 8px 16px;
-            font-size: 0.875rem;
-        }
-
-        .delete-link-btn {
-            background-color: #dc2626;
-            padding: 8px 16px;
-            font-size: 0.875rem;
-            margin-left: 0.5rem;
-        }
-
-        .prompt-preview {
-            margin-top: 1rem;
-            padding: 1rem;
-            background: #f8fafc;
-            border-radius: 6px;
-            font-size: 0.875rem;
-        }
-
-        #subjectInput {
-            width: 100%;
-            padding: 0.5rem;
-            margin-bottom: 1rem;
-            border: 1px solid #e2e8f0;
-            border-radius: 4px;
         }
 
         .mode-tabs {
             display: flex;
             gap: 1rem;
             margin-bottom: 2rem;
+            flex-wrap: wrap;
         }
 
         .mode-tab {
             flex: 1;
+            min-width: 150px;
             padding: 1rem;
             border: 2px solid #E5E7EB;
             border-radius: 0.75rem;
             cursor: pointer;
             text-align: center;
             transition: all 0.3s ease;
+            font-weight: 500;
+            background: white;
+        }
+
+        .mode-tab:hover {
+            border-color: var(--secondary-color);
+            background: #F5F3FF;
         }
 
         .mode-tab.active {
@@ -96,76 +77,157 @@
 
         .mode-panel {
             display: none;
+            animation: fadeIn 0.3s ease;
         }
 
         .mode-panel.active {
             display: block;
         }
 
-        .refined-prompt {
-            margin-top: 1rem;
-            padding: 1rem;
-            background: #F3F4F6;
-            border-radius: 0.75rem;
-            font-size: 0.875rem;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        .prompt-help {
-            color: #6B7280;
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--text-color);
+        }
+
+        input[type="text"], textarea, select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #E5E7EB;
+            border-radius: 0.75rem;
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+            font-family: inherit;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.75rem;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-1px);
+        }
+
+        .custom-prompt-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            background: #F9FAFB;
+            border-radius: 0.5rem;
+        }
+
+        .custom-prompt-option input[type="checkbox"] {
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 0.25rem;
+            border: 2px solid #E5E7EB;
+            cursor: pointer;
+        }
+
+        .custom-prompt-option label {
+            margin: 0;
             font-size: 0.875rem;
-            margin-top: 0.5rem;
-            font-style: italic;
+            color: #6B7280;
+            cursor: pointer;
+        }
+
+        .generated-links {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
         .link-card {
-            border-left: 4px solid;
-            padding-left: 1rem;
+            border: 1px solid #E5E7EB;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            background: white;
+            transition: all 0.3s ease;
         }
 
-        .link-card.investigator {
-            border-color: #10B981;
+        .link-card:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
         }
 
-        .link-card.comparitor {
-            border-color: #3B82F6;
-        }
-
-        .link-card.quest {
-            border-color: #F43F5E;
+        .link-card h3 {
+            margin: 0 0 1rem 0;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
 
         .mode-indicator {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.375rem;
             font-size: 0.75rem;
             font-weight: 500;
-            margin-left: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
         }
 
-        .mode-indicator.investigator {
-            background: #D1FAE5;
-            color: #065F46;
+        .link-url {
+            background: #F9FAFB;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-family: monospace;
+            font-size: 0.875rem;
+            word-break: break-all;
+            margin: 1rem 0;
         }
 
-        .mode-indicator.comparitor {
-            background: #DBEAFE;
-            color: #1E40AF;
+        .button-group {
+            display: flex;
+            gap: 0.5rem;
         }
 
-        .mode-indicator.quest {
-            background: #FFE4E6;
-            color: #BE123C;
+        .copy-link-btn {
+            background-color: var(--success-color);
+            flex: 1;
         }
 
-        .mode-indicator.codebreaker {
-            background: #E0F2FE;
-            color: #0369A1;
+        .delete-link-btn {
+            background-color: var(--error-color);
+            flex: 1;
         }
 
-        .mode-indicator.eliminator {
-            background: #F3E8FF;
-            color: #6D28D9;
+        .refined-prompt {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #F9FAFB;
+            border-radius: 0.75rem;
+            font-size: 0.875rem;
+            border-left: 4px solid var(--primary-color);
         }
 
         .refining-indicator {
@@ -181,62 +243,46 @@
             100% { opacity: 0.6; }
         }
 
-        .link-card.codebreaker {
-            border-color: #0EA5E9;
-        }
-        .link-card.eliminator {
-            border-color: #8B5CF6;
+        /* Mode-specific colors */
+        .mode-indicator.investigator { background: #D1FAE5; color: #065F46; }
+        .mode-indicator.comparitor { background: #DBEAFE; color: #1E40AF; }
+        .mode-indicator.quest { background: #FFE4E6; color: #BE123C; }
+        .mode-indicator.codebreaker { background: #E0F2FE; color: #0369A1; }
+        .mode-indicator.eliminator { background: #F3E8FF; color: #6D28D9; }
+
+        .link-card.investigator { border-left: 4px solid #10B981; }
+        .link-card.comparitor { border-left: 4px solid #3B82F6; }
+        .link-card.quest { border-left: 4px solid #F43F5E; }
+        .link-card.codebreaker { border-left: 4px solid #0EA5E9; }
+        .link-card.eliminator { border-left: 4px solid #8B5CF6; }
+
+        /* Add beta badge styles */
+        .beta-badge {
+            background: #F59E0B;
+            color: white;
+            font-size: 0.625rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 1rem;
+            margin-left: 0.5rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: inline-block;
+            vertical-align: middle;
+            animation: pulse-beta 2s infinite;
         }
 
-        .mode-indicator.codebreaker {
-            background: #EDE9FE;
-            color: #5B21B6;
-        }
-        .mode-indicator.eliminator {
-            background: #FCE7F3;
-            color: #BE185D;
+        @keyframes pulse-beta {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
         }
 
-        .custom-prompt-option {
-            margin: 10px 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .custom-prompt-option input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-        }
-        .custom-prompt-option label {
-            font-size: 0.9rem;
-            color: #4B5563;
-        }
-
-        .language-select {
-            width: 100%;
-            padding: 0.75rem;
-            margin: 0.5rem 0 1rem;
-            border: 2px solid #E5E7EB;
-            border-radius: 0.75rem;
-            font-size: 1rem;
-            background-color: white;
-            color: var(--text-color);
-            cursor: pointer;
-            transition: border-color 0.3s ease;
-        }
-
-        .language-select:focus {
-            outline: none;
-            border-color: var(--primary-color);
-        }
-
-        .language-select option {
-            padding: 0.5rem;
-            font-size: 1rem;
+        .mode-tab.active .beta-badge {
+            background: white;
+            color: var(--primary-color);
         }
     </style>
-    <script defer src="/css.js"></script>
-    <script defer src="/teacher-dashboard.js"></script>
 </head>
 <body>
     <div class="container">
@@ -246,8 +292,8 @@
             <div class="mode-tab active" data-mode="investigator">Investigator Mode</div>
             <div class="mode-tab" data-mode="comparitor">Comparitor Mode</div>
             <div class="mode-tab" data-mode="quest">Quest Mode</div>
-            <div class="mode-tab" data-mode="codebreaker">Codebreaker Mode</div>
-            <div class="mode-tab" data-mode="eliminator">Eliminator Mode</div>
+            <div class="mode-tab" data-mode="codebreaker">Codebreaker Mode<span class="beta-badge">Beta</span></div>
+            <div class="mode-tab" data-mode="eliminator">Eliminator Mode<span class="beta-badge">Beta</span></div>
         </div>
 
         <div class="prompt-form">
@@ -324,7 +370,7 @@
             <div class="mode-panel" id="eliminator-panel">
                 <h2>Create Eliminator Link</h2>
                 <label for="eliminatorSubject">Subject/Topic:</label>
-                <input type="text" id="eliminatorSubject" placeholder="e.g., Common Physics Misconceptions">
+                <input type="text" id="eliminatorSubject" placeholder="e.g., Chemical Elements">
                 
                 <label for="eliminatorPrompt">Prompt:</label>
                 <textarea id="eliminatorPrompt" placeholder="Enter your prompt. It will be automatically refined for optimal teaching unless custom prompt is checked."></textarea>
@@ -337,11 +383,14 @@
         </div>
 
         <div class="generated-links">
-            <h2>Generated Links</h2>
+            <h2>Your Generated Links</h2>
             <div id="linksList">
                 <!-- Links will be dynamically added here -->
             </div>
         </div>
     </div>
+
+    <script src="/css.js"></script>
+    <script src="/teacher-dashboard.js"></script>
 </body>
 </html> 

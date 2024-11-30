@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=0.86, maximum-scale=5.0, minimum-scale=0.86">
     <title id="pageTitle">Tutor-Tron AI</title>
     <!-- Immediate mode detection and theme application -->
     <script>
@@ -40,6 +40,34 @@
     <link href="/tutor.css" rel="stylesheet">
     <script src="/tutor.js" defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Add CSS to adjust container size -->
+    <style>
+        .container {
+            max-width: 1200px; /* Increased from default */
+            width: 95%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                font-size: 14px; /* Slightly smaller base font size on mobile */
+            }
+            .container {
+                width: 92%;
+                padding: 15px;
+            }
+        }
+        
+        .chat-container {
+            max-height: 70vh; /* Adjusted height */
+        }
+        
+        .message {
+            max-width: 95%; /* Allow messages to use more width */
+            margin: 10px auto;
+        }
+    </style>
 </head>
 <body>
     <div class="container">

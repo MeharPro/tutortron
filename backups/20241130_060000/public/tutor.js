@@ -51,6 +51,123 @@ highlightCSS.rel = 'stylesheet';
 highlightCSS.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css';
 document.head.appendChild(highlightCSS);
 
+// Define available models in order of preference
+const FREE_MODELS = [
+    "meta-llama/llama-3.2-90b-vision-instruct:free",
+    "google/learnlm-1.5-pro-experimental:free",
+    "meta-llama/llama-3.1-405b-instruct:free",
+    "liquid/lfm-40b:free",
+    "google/gemini-exp-1114",
+    "meta-llama/llama-3.1-70b-instruct:free",
+    "google/gemma-2-9b-it:free",
+    "qwen/qwen-2-7b-instruct:free"
+];
+
+const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
+
+// Keep track of which model we're using
+let currentModelIndex = 0;
+
+// Get next model in sequence
+function getNextModel() {
+    const model = FREE_MODELS[currentModelIndex];
+    currentModelIndex = (currentModelIndex + 1) % FREE_MODELS.length;
+    return model;
+}
+
+// Reset model index if we get a successful response
+function resetModelIndex() {
+    currentModelIndex = 0;
+}
+
+// Modify sendMessage function to use sequential models
+async function sendMessage() {
+    if (isProcessing) return;
+    
+    const messageInput = document.getElementById('messageInput');
+    const message = messageInput.value.trim();
+    const imageUpload = document.getElementById('imageUpload');
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+    
+    if (!message && (!imageUpload || !imageUpload.files[0])) return;
+    
+    isProcessing = true;
+    showLoading();
+    
+    try {
+        let imageBase64 = null;
+        if (imageUpload && imageUpload.files[0]) {
+            imageBase64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+                reader.readAsDataURL(imageUpload.files[0]);
+            });
+        }
+
+        // Try each model until one works
+        let response;
+        let data;
+        let success = false;
+
+        while (!success && currentModelIndex < FREE_MODELS.length) {
+            try {
+                const model = imageBase64 ? VISION_MODEL : FREE_MODELS[currentModelIndex];
+                
+                response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message,
+                        subject: window.TUTOR_CONFIG.subject,
+                        prompt: window.TUTOR_CONFIG.prompt,
+                        mode: window.TUTOR_CONFIG.mode,
+                        model,
+                        image: imageBase64
+                    })
+                });
+
+                if (response.ok) {
+                    data = await response.json();
+                    success = true;
+                    resetModelIndex(); // Reset to first model on success
+                } else {
+                    currentModelIndex++; // Try next model
+                }
+            } catch (error) {
+                console.error(`Error with model ${FREE_MODELS[currentModelIndex]}:`, error);
+                currentModelIndex++; // Try next model
+            }
+        }
+
+        if (!success) {
+            throw new Error('All models failed to respond');
+        }
+
+        appendMessage(message, 'user');
+        if (imageBase64) {
+            appendImageMessage(imageUpload.files[0]);
+        }
+        appendMessage(data.response, 'ai');
+        
+        // Clear input and image
+        messageInput.value = '';
+        if (imageUpload) {
+            imageUpload.value = '';
+            imagePreviewContainer.style.display = 'none';
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showError('Failed to send message. Please try again.');
+        currentModelIndex = 0; // Reset index after all models fail
+    } finally {
+        isProcessing = false;
+        hideLoading();
+    }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     await window.envLoaded;
     
@@ -59,8 +176,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const messageInput = document.getElementById('messageInput');
     const sendButton = document.getElementById('sendMessage');
     const loadingDiv = document.getElementById('loading');
-    const speakButton = document.getElementById('speakButton');
-    const copyButton = document.getElementById('copyButton');
     
     // State variables
     const conversationHistory = [];
@@ -70,156 +185,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let consoleErrors = [];
     let isProcessing = false;
     let mathJaxReady = false;
-
-    // Text-to-speech functionality
-    async function speak(text) {
-        const DEEPGRAM_URL = "https://api.deepgram.com/v1/speak";
-        
-        try {
-            const response = await fetch(DEEPGRAM_URL, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Token ${apiKeys.DEEPGRAM_API_KEY}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    text: text,
-                    voice: "aura-asteria-en",  // Using Aura voice
-                    rate: 1.0,                 // Normal speaking rate
-                    pitch: 1.0,                // Normal pitch
-                    model: "nova-2"            // Using Nova-2 model
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error('Text-to-speech request failed');
-            }
-
-            const audioBlob = await response.blob();
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const audio = new Audio(audioUrl);
-            currentSpeech = audio;
-            
-            audio.onended = () => {
-                isSpeaking = false;
-                updateSpeakButton();
-                currentSpeech = null;
-                URL.revokeObjectURL(audioUrl); // Clean up the URL
-            };
-
-            audio.onerror = (error) => {
-                console.error('Audio playback error:', error);
-                isSpeaking = false;
-                updateSpeakButton();
-                currentSpeech = null;
-                URL.revokeObjectURL(audioUrl);
-                showError('Failed to play audio response');
-            };
-
-            await audio.play();
-            isSpeaking = true;
-            updateSpeakButton();
-        } catch (error) {
-            console.error('Error during text-to-speech:', error);
-            isSpeaking = false;
-            updateSpeakButton();
-            showError('Failed to generate speech');
-        }
-    }
-
-    // Update speak button event listener
-    document.getElementById('speakButton').addEventListener('click', () => {
-        if (isSpeaking) {
-            if (currentSpeech) {
-                currentSpeech.pause();
-                currentSpeech = null;
-            }
-            isSpeaking = false;
-            updateSpeakButton();
-        } else {
-            const aiMessages = Array.from(chatContainer.children)
-                .filter(msg => msg.classList.contains('ai-message'));
-            
-            if (aiMessages.length > 0) {
-                const lastMessage = aiMessages[aiMessages.length - 1].textContent;
-                speak(lastMessage);
-            } else {
-                showError('No AI response to speak');
-            }
-        }
-    });
-
-    // Add copy chat functionality
-    copyButton.addEventListener('click', async () => {
-        const messages = Array.from(chatContainer.children).map(msg => {
-            const role = msg.classList.contains('user-message') ? 'You' : 'Tutor';
-            const content = msg.textContent.trim();
-            return `${role}: ${content}`;
-        });
-        
-        const chatText = messages.join('\n\n');
-        
-        try {
-            // Try using the modern Clipboard API first
-            if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(chatText);
-                showCopyNotification('Chat copied to clipboard!');
-            } else {
-                // Fallback for mobile devices and non-secure contexts
-                const textArea = document.createElement('textarea');
-                textArea.value = chatText;
-                
-                // Make the textarea visible but off-screen
-                textArea.style.position = 'fixed';
-                textArea.style.top = '0';
-                textArea.style.left = '0';
-                textArea.style.opacity = '0';
-                textArea.style.pointerEvents = 'none';
-                document.body.appendChild(textArea);
-                
-                if (navigator.userAgent.match(/ipad|iphone/i)) {
-                    // iOS devices need special handling
-                    const range = document.createRange();
-                    range.selectNodeContents(textArea);
-                    const selection = window.getSelection();
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                    textArea.setSelectionRange(0, 999999);
-                } else {
-                    textArea.select();
-                }
-                
-                try {
-                    const successful = document.execCommand('copy');
-                    if (successful) {
-                        showCopyNotification('Chat copied to clipboard!');
-                    } else {
-                        throw new Error('Copy command failed');
-                    }
-                } catch (err) {
-                    console.error('Fallback copy failed:', err);
-                    showError('Please try copying manually');
-                } finally {
-                    document.body.removeChild(textArea);
-                }
-            }
-        } catch (err) {
-            console.error('Copy failed:', err);
-            showError('Failed to copy chat to clipboard');
-        }
-    });
-
-    // Add copy notification function
-    function showCopyNotification(message) {
-        const notification = document.createElement('div');
-        notification.className = 'copy-notification';
-        notification.textContent = message;
-        document.body.appendChild(notification);
-        
-        setTimeout(() => {
-            notification.remove();
-        }, 2000);
-    }
+    let currentAudio = null;
 
     // Get API keys
     let apiKeys;
@@ -257,7 +223,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             };
             conversationHistory.push(systemMessage);
 
-            // Get initial response from AI
+            // Initial API call
             const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -267,7 +233,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     'X-Title': 'Tutor-Tron'
                 },
                 body: JSON.stringify({
-                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-sonnet-vision',
+                    model: FREE_MODELS[currentModelIndex], // Always use first model for initial message
                     messages: conversationHistory,
                     temperature: 0.7,
                     max_tokens: 400
@@ -324,6 +290,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // Temporarily disable image upload functionality
+    /*
     // Add image upload button to button group
     const buttonGroup = document.querySelector('.button-group');
     const imageButton = document.createElement('button');
@@ -363,8 +331,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     reader.readAsDataURL(file);
                 });
 
-                // Add image message to chat
-                appendMessage('user', `[Uploaded Image]\n${base64Image}`);
+                // Add image to chat
+                appendMessage('user', base64Image);
 
                 // Add to conversation history
                 conversationHistory.push({
@@ -383,82 +351,97 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 // Get AI response
                 await handleSendMessage(true);
+
             } catch (error) {
-                console.error('Error uploading image:', error);
+                console.error('Image upload error:', error);
                 showError('Failed to upload image. Please try again.');
             } finally {
-                // Reset button state
                 imageButton.disabled = false;
                 imageButton.innerHTML = '<span>🖼️</span> Add Image';
-                // Reset file input
-                fileInput.value = '';
             }
         }
     });
+    */
 
     // Update handleSendMessage to handle image messages
-    async function handleSendMessage(isImageMessage = false) {
-        if (isProcessing || (!isImageMessage && !messageInput.value.trim())) return;
+    async function handleSendMessage() {
+        if (isProcessing) return;
         
-        const userMessage = isImageMessage ? '' : messageInput.value.trim();
-        if (!isImageMessage) {
-            messageInput.value = '';
-        }
+        const messageInput = document.getElementById('messageInput');
+        const message = messageInput.value.trim();
         
-        if (!isImageMessage) {
-            appendMessage('user', userMessage);
-        }
+        if (!message) return;
         
         isProcessing = true;
-        if (loadingDiv) loadingDiv.style.display = 'block';
+        showLoading();
         
         try {
-            if (!isImageMessage) {
-                // Add user message to history
-                conversationHistory.push({
-                    role: "user",
-                    content: userMessage
-                });
+            // Try each model until one works
+            let success = false;
+            let data;
+            
+            while (!success && currentModelIndex < FREE_MODELS.length) {
+                try {
+                    const model = FREE_MODELS[currentModelIndex];
+                    console.log('Trying model:', model); // Debug log
+                    
+                    const response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message,
+                            subject: window.TUTOR_CONFIG.subject,
+                            prompt: window.TUTOR_CONFIG.prompt,
+                            mode: window.TUTOR_CONFIG.mode,
+                            model
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        console.error('API Error:', response.status, errorData); // Debug log
+                        throw new Error(`API returned ${response.status}`);
+                    }
+
+                    data = await response.json();
+                    if (!data || !data.response) {
+                        console.error('Invalid API response:', data); // Debug log
+                        throw new Error('Invalid API response format');
+                    }
+
+                    success = true;
+                    currentModelIndex = 0; // Reset on success
+                    
+                } catch (error) {
+                    console.error(`Error with model ${FREE_MODELS[currentModelIndex]}:`, error);
+                    currentModelIndex++;
+                    
+                    if (currentModelIndex >= FREE_MODELS.length) {
+                        throw new Error('All models failed');
+                    }
+                }
             }
-            
-            // Get AI response
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
-                    'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
-                    'X-Title': 'Tutor-Tron'
-                },
-                body: JSON.stringify({
-                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-sonnet-vision',
-                    messages: conversationHistory,
-                    temperature: 0.7,
-                    max_tokens: 400
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to get AI response');
+
+            if (!success) {
+                throw new Error('Failed to get response from any model');
             }
+
+            // Display messages
+            appendMessage(message, 'user');
+            appendMessage(data.response, 'ai');
             
-            const data = await response.json();
-            const aiMessage = data.choices[0].message.content;
+            // Clear input
+            messageInput.value = '';
             
-            // Add AI's response to history
-            conversationHistory.push({
-                role: "assistant",
-                content: aiMessage
-            });
-            
-            // Display the AI's response
-            appendMessage('ai', aiMessage);
         } catch (error) {
             console.error('Error getting AI response:', error);
-            showError('Failed to get response from tutor. Please try again.');
+            showError('Failed to get response. Please try again.');
+            currentModelIndex = 0; // Reset index after all attempts fail
         } finally {
             isProcessing = false;
-            if (loadingDiv) loadingDiv.style.display = 'none';
+            hideLoading();
         }
     }
 
@@ -707,4 +690,294 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     `;
     document.head.appendChild(mathJaxStyle);
+
+    // Speech synthesis using Deepgram
+    async function speakText(text) {
+        try {
+            const speakButton = document.getElementById('speakButton');
+            
+            // If already speaking, stop it
+            if (isSpeaking) {
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                }
+                isSpeaking = false;
+                speakButton.innerHTML = '<span>🔊</span> Speak Response';
+                return;
+            }
+
+            // Clean the text before sending to Deepgram
+            const cleanText = text.replace(/```[\s\S]*?```/g, '')
+                                 .replace(/`.*?`/g, '')
+                                 .replace(/\[.*?\]/g, '')
+                                 .replace(/\(.*?\)/g, '')
+                                 .replace(/#+\s/g, '')
+                                 .replace(/\*\*/g, '')
+                                 .replace(/\*/g, '');
+
+            // Get Deepgram API key from KV
+            const response = await fetch('/api/get-deepgram-key');
+            const { key } = await response.json();
+
+            if (!key) {
+                throw new Error('Deepgram API key not found');
+            }
+
+            // Call Deepgram TTS API
+            const ttsResponse = await fetch('https://api.deepgram.com/v1/speak', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Token ${key}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    text: cleanText,
+                    voice: 'nova',
+                    rate: 1.0,
+                    pitch: 1.0
+                })
+            });
+
+            if (!ttsResponse.ok) {
+                throw new Error('Failed to generate speech');
+            }
+
+            const audioBlob = await ttsResponse.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            
+            // Create and play audio
+            currentAudio = new Audio(audioUrl);
+            currentAudio.addEventListener('ended', () => {
+                isSpeaking = false;
+                speakButton.innerHTML = '<span>🔊</span> Speak Response';
+                URL.revokeObjectURL(audioUrl);
+            });
+
+            // Update button state and play
+            isSpeaking = true;
+            speakButton.innerHTML = '<span>⏹</span> Stop Speaking';
+            await currentAudio.play();
+
+        } catch (error) {
+            console.error('Speech synthesis error:', error);
+            alert('Failed to generate speech. Please try again.');
+            isSpeaking = false;
+            const speakButton = document.getElementById('speakButton');
+            speakButton.innerHTML = '<span>🔊</span> Speak Response';
+        }
+    }
+
+    // Copy chat functionality
+    async function copyChat() {
+        const chatContainer = document.getElementById('chatContainer');
+        let chatText = '';
+        
+        // Get all messages
+        const messages = chatContainer.getElementsByClassName('message');
+        Array.from(messages).forEach(message => {
+            // Determine if it's user or AI message
+            const isUser = message.classList.contains('user-message');
+            const role = isUser ? 'You' : 'Tutor';
+            
+            // Get message content, handling both text and images
+            let content = '';
+            if (message.querySelector('img')) {
+                content = '[Image]';
+            } else {
+                // Clean up the text content
+                content = message.textContent
+                    .replace(/Copy code/g, '') // Remove "Copy code" buttons
+                    .replace(/\n{3,}/g, '\n\n') // Replace multiple newlines with double newline
+                    .trim();
+            }
+            
+            // Add to chat text if there's content
+            if (content) {
+                chatText += `${role}: ${content}\n\n`;
+            }
+        });
+        
+        try {
+            // Use the newer clipboard API with fallback
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(chatText);
+                showCopySuccess();
+            } else {
+                fallbackCopyToClipboard(chatText);
+            }
+        } catch (error) {
+            console.error('Copy failed:', error);
+            fallbackCopyToClipboard(chatText);
+        }
+    }
+
+    // Fallback copy function
+    function fallbackCopyToClipboard(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        
+        try {
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showCopySuccess();
+        } catch (error) {
+            console.error('Fallback copy failed:', error);
+            document.body.removeChild(textArea);
+            showCopyError();
+        }
+    }
+
+    // Show copy success message
+    function showCopySuccess() {
+        const copyButton = document.getElementById('copyButton');
+        const originalText = copyButton.innerHTML;
+        copyButton.innerHTML = '<span>✓</span> Copied!';
+        
+        // Show toast notification
+        const toast = document.createElement('div');
+        toast.className = 'copy-toast';
+        toast.textContent = 'Chat copied to clipboard!';
+        document.body.appendChild(toast);
+        
+        // Remove toast after animation
+        setTimeout(() => {
+            document.body.removeChild(toast);
+            copyButton.innerHTML = originalText;
+        }, 2000);
+    }
+
+    // Show copy error message
+    function showCopyError() {
+        showToast('Failed to copy chat. Please try again.', 'error');
+    }
+
+    // Add event listener for copy button
+    document.getElementById('copyButton').addEventListener('click', copyChat);
+
+    // Toast notification system
+    function showToast(message, type = 'success') {
+        // Remove existing toast if any
+        const existingToast = document.querySelector('.toast');
+        if (existingToast) {
+            document.body.removeChild(existingToast);
+        }
+        
+        // Create new toast
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        
+        // Add toast styles if not already added
+        if (!document.getElementById('toastStyles')) {
+            const style = document.createElement('style');
+            style.id = 'toastStyles';
+            style.textContent = `
+                .toast {
+                    position: fixed;
+                    bottom: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    color: white;
+                    font-size: 14px;
+                    z-index: 10000;
+                    animation: toast-fade 2s ease;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                }
+                
+                .toast-success {
+                    background-color: #4CAF50;
+                }
+                
+                .toast-error {
+                    background-color: #f44336;
+                }
+                
+                @keyframes toast-fade {
+                    0% { opacity: 0; transform: translate(-50%, 20px); }
+                    10% { opacity: 1; transform: translate(-50%, 0); }
+                    90% { opacity: 1; transform: translate(-50%, 0); }
+                    100% { opacity: 0; transform: translate(-50%, -20px); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // Add to document and remove after animation
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            if (toast.parentNode) {
+                document.body.removeChild(toast);
+            }
+        }, 2000);
+    }
+
+    // Event listeners for buttons
+    document.addEventListener('DOMContentLoaded', () => {
+        // ... existing DOMContentLoaded code ...
+
+        // Add speak button handler
+        const speakButton = document.getElementById('speakButton');
+        if (speakButton) {
+            speakButton.addEventListener('click', () => {
+                const messages = document.getElementsByClassName('ai-message');
+                if (messages.length > 0) {
+                    const lastMessage = messages[messages.length - 1];
+                    speakText(lastMessage.textContent);
+                }
+            });
+        }
+
+        // Add copy button handler
+        const copyButton = document.getElementById('copyButton');
+        if (copyButton) {
+            copyButton.addEventListener('click', copyChat);
+        }
+    });
+
+    // Loading state functions
+    function showLoading() {
+        const loadingDiv = document.getElementById('loading');
+        if (loadingDiv) loadingDiv.style.display = 'block';
+    }
+
+    function hideLoading() {
+        const loadingDiv = document.getElementById('loading');
+        if (loadingDiv) loadingDiv.style.display = 'none';
+    }
+
+    // Add styles for chat images
+    const imageStyles = document.createElement('style');
+    imageStyles.textContent = `
+        .chat-image {
+            max-width: 300px;
+            max-height: 300px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin: 10px 0;
+        }
+        
+        .chat-image:hover {
+            transform: scale(1.05);
+        }
+        
+        .user-message .chat-image {
+            float: right;
+            margin-left: 20px;
+        }
+        
+        .ai-message .chat-image {
+            float: left;
+            margin-right: 20px;
+        }
+    `;
+    document.head.appendChild(imageStyles);
 }); 
