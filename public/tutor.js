@@ -555,4 +555,139 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     `;
     document.head.appendChild(mathJaxStyle);
+
+    // Speech synthesis functionality
+    function speakText(text) {
+        // Remove code blocks and other markdown before speaking
+        const cleanText = text.replace(/```[\s\S]*?```/g, '')
+                             .replace(/`.*?`/g, '')
+                             .replace(/\[.*?\]/g, '')
+                             .replace(/\(.*?\)/g, '')
+                             .replace(/#+\s/g, '')
+                             .replace(/\*\*/g, '')
+                             .replace(/\*/g, '');
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        
+        // Get available voices and set to a natural sounding one if available
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(voice => 
+            voice.name.includes('Samantha') || // iOS/macOS
+            voice.name.includes('Google US English Female') || // Chrome
+            voice.name.includes('Microsoft Zira') // Windows
+        );
+        
+        if (preferredVoice) {
+            utterance.voice = preferredVoice;
+        }
+
+        window.speechSynthesis.speak(utterance);
+    }
+
+    // Copy chat functionality
+    function copyChat() {
+        const chatContainer = document.getElementById('chatContainer');
+        let chatText = '';
+        
+        // Get all messages
+        const messages = chatContainer.getElementsByClassName('message');
+        Array.from(messages).forEach(message => {
+            const role = message.classList.contains('user-message') ? 'You' : 'Tutor';
+            const content = message.textContent.trim();
+            chatText += `${role}: ${content}\n\n`;
+        });
+        
+        // Use the newer clipboard API with fallback
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(chatText).then(() => {
+                showCopySuccess();
+            }).catch(() => {
+                fallbackCopyToClipboard(chatText);
+            });
+        } else {
+            fallbackCopyToClipboard(chatText);
+        }
+    }
+
+    // Fallback copy method for mobile devices
+    function fallbackCopyToClipboard(text) {
+        // Create a temporary textarea
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        
+        // Handle iOS specific issues
+        textArea.contentEditable = true;
+        textArea.readOnly = false;
+        
+        // Select the text and copy
+        const range = document.createRange();
+        range.selectNodeContents(textArea);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        textArea.setSelectionRange(0, text.length);
+        
+        try {
+            document.execCommand('copy');
+            showCopySuccess();
+        } catch (err) {
+            console.error('Failed to copy chat:', err);
+            alert('Failed to copy chat. Please try again.');
+        } finally {
+            document.body.removeChild(textArea);
+        }
+    }
+
+    // Show copy success message
+    function showCopySuccess() {
+        const copyButton = document.getElementById('copyButton');
+        const originalText = copyButton.innerHTML;
+        copyButton.innerHTML = '<span>✓</span> Copied!';
+        setTimeout(() => {
+            copyButton.innerHTML = originalText;
+        }, 2000);
+    }
+
+    // Initialize speech synthesis
+    function initSpeechSynthesis() {
+        // Load voices when they're available (needed for Chrome)
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = () => {
+                window.speechSynthesis.getVoices();
+            };
+        }
+    }
+
+    // Event listeners for buttons
+    document.addEventListener('DOMContentLoaded', () => {
+        // ... existing DOMContentLoaded code ...
+
+        // Add speak button handler
+        const speakButton = document.getElementById('speakButton');
+        if (speakButton) {
+            speakButton.addEventListener('click', () => {
+                const messages = document.getElementsByClassName('ai-message');
+                if (messages.length > 0) {
+                    const lastMessage = messages[messages.length - 1];
+                    speakText(lastMessage.textContent);
+                }
+            });
+        }
+
+        // Add copy button handler
+        const copyButton = document.getElementById('copyButton');
+        if (copyButton) {
+            copyButton.addEventListener('click', copyChat);
+        }
+
+        // Initialize speech synthesis
+        initSpeechSynthesis();
+    });
 }); 
