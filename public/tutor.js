@@ -68,6 +68,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let consoleErrors = [];
     let isProcessing = false;
     let mathJaxReady = false;
+    let currentAudio = null;
 
     // Get API keys
     let apiKeys;
@@ -556,39 +557,85 @@ document.addEventListener("DOMContentLoaded", async () => {
     `;
     document.head.appendChild(mathJaxStyle);
 
-    // Speech synthesis functionality
-    function speakText(text) {
-        // Remove code blocks and other markdown before speaking
-        const cleanText = text.replace(/```[\s\S]*?```/g, '')
-                             .replace(/`.*?`/g, '')
-                             .replace(/\[.*?\]/g, '')
-                             .replace(/\(.*?\)/g, '')
-                             .replace(/#+\s/g, '')
-                             .replace(/\*\*/g, '')
-                             .replace(/\*/g, '');
+    // Speech synthesis using Deepgram
+    async function speakText(text) {
+        try {
+            const speakButton = document.getElementById('speakButton');
+            
+            // If already speaking, stop it
+            if (isSpeaking) {
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                }
+                isSpeaking = false;
+                speakButton.innerHTML = '<span>🔊</span> Speak Response';
+                return;
+            }
 
-        const utterance = new SpeechSynthesisUtterance(cleanText);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        
-        // Get available voices and set to a natural sounding one if available
-        const voices = window.speechSynthesis.getVoices();
-        const preferredVoice = voices.find(voice => 
-            voice.name.includes('Samantha') || // iOS/macOS
-            voice.name.includes('Google US English Female') || // Chrome
-            voice.name.includes('Microsoft Zira') // Windows
-        );
-        
-        if (preferredVoice) {
-            utterance.voice = preferredVoice;
+            // Clean the text before sending to Deepgram
+            const cleanText = text.replace(/```[\s\S]*?```/g, '')
+                                 .replace(/`.*?`/g, '')
+                                 .replace(/\[.*?\]/g, '')
+                                 .replace(/\(.*?\)/g, '')
+                                 .replace(/#+\s/g, '')
+                                 .replace(/\*\*/g, '')
+                                 .replace(/\*/g, '');
+
+            // Get Deepgram API key from KV
+            const response = await fetch('/api/get-deepgram-key');
+            const { key } = await response.json();
+
+            if (!key) {
+                throw new Error('Deepgram API key not found');
+            }
+
+            // Call Deepgram TTS API
+            const ttsResponse = await fetch('https://api.deepgram.com/v1/speak', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Token ${key}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    text: cleanText,
+                    voice: 'nova',
+                    rate: 1.0,
+                    pitch: 1.0
+                })
+            });
+
+            if (!ttsResponse.ok) {
+                throw new Error('Failed to generate speech');
+            }
+
+            const audioBlob = await ttsResponse.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            
+            // Create and play audio
+            currentAudio = new Audio(audioUrl);
+            currentAudio.addEventListener('ended', () => {
+                isSpeaking = false;
+                speakButton.innerHTML = '<span>🔊</span> Speak Response';
+                URL.revokeObjectURL(audioUrl);
+            });
+
+            // Update button state and play
+            isSpeaking = true;
+            speakButton.innerHTML = '<span>⏹</span> Stop Speaking';
+            await currentAudio.play();
+
+        } catch (error) {
+            console.error('Speech synthesis error:', error);
+            alert('Failed to generate speech. Please try again.');
+            isSpeaking = false;
+            const speakButton = document.getElementById('speakButton');
+            speakButton.innerHTML = '<span>🔊</span> Speak Response';
         }
-
-        window.speechSynthesis.speak(utterance);
     }
 
     // Copy chat functionality
-    function copyChat() {
+    async function copyChat() {
         const chatContainer = document.getElementById('chatContainer');
         let chatText = '';
         
@@ -600,48 +647,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             chatText += `${role}: ${content}\n\n`;
         });
         
-        // Use the newer clipboard API with fallback
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(chatText).then(() => {
-                showCopySuccess();
-            }).catch(() => {
-                fallbackCopyToClipboard(chatText);
-            });
-        } else {
-            fallbackCopyToClipboard(chatText);
-        }
-    }
-
-    // Fallback copy method for mobile devices
-    function fallbackCopyToClipboard(text) {
-        // Create a temporary textarea
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        textArea.style.top = '-999999px';
-        document.body.appendChild(textArea);
-        
-        // Handle iOS specific issues
-        textArea.contentEditable = true;
-        textArea.readOnly = false;
-        
-        // Select the text and copy
-        const range = document.createRange();
-        range.selectNodeContents(textArea);
-        const selection = window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
-        textArea.setSelectionRange(0, text.length);
-        
         try {
-            document.execCommand('copy');
-            showCopySuccess();
-        } catch (err) {
-            console.error('Failed to copy chat:', err);
-            alert('Failed to copy chat. Please try again.');
-        } finally {
-            document.body.removeChild(textArea);
+            // Use the newer clipboard API with fallback
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(chatText);
+                showCopySuccess();
+            } else {
+                fallbackCopyToClipboard(chatText);
+            }
+        } catch (error) {
+            console.error('Copy failed:', error);
+            fallbackCopyToClipboard(chatText);
         }
     }
 
@@ -650,20 +666,46 @@ document.addEventListener("DOMContentLoaded", async () => {
         const copyButton = document.getElementById('copyButton');
         const originalText = copyButton.innerHTML;
         copyButton.innerHTML = '<span>✓</span> Copied!';
+        
+        // Show toast notification
+        const toast = document.createElement('div');
+        toast.className = 'copy-toast';
+        toast.textContent = 'Chat copied to clipboard!';
+        document.body.appendChild(toast);
+        
+        // Remove toast after animation
         setTimeout(() => {
+            document.body.removeChild(toast);
             copyButton.innerHTML = originalText;
         }, 2000);
     }
 
-    // Initialize speech synthesis
-    function initSpeechSynthesis() {
-        // Load voices when they're available (needed for Chrome)
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.onvoiceschanged = () => {
-                window.speechSynthesis.getVoices();
-            };
+    // Add toast notification styles
+    const toastStyle = document.createElement('style');
+    toastStyle.textContent = `
+        .copy-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+            animation: toast-fade 2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
-    }
+        
+        @keyframes toast-fade {
+            0% { opacity: 0; transform: translate(-50%, 20px); }
+            10% { opacity: 1; transform: translate(-50%, 0); }
+            90% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -20px); }
+        }
+    `;
+    document.head.appendChild(toastStyle);
 
     // Event listeners for buttons
     document.addEventListener('DOMContentLoaded', () => {
@@ -686,8 +728,5 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (copyButton) {
             copyButton.addEventListener('click', copyChat);
         }
-
-        // Initialize speech synthesis
-        initSpeechSynthesis();
     });
 }); 
