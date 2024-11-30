@@ -33,17 +33,48 @@ async function authenticate(request, env) {
 }
 
 // API Routes
-router.post('/api/auth/login', async (request, env) => {
+router.get('/api/keys', async (request, env) => {
     try {
-        const { email, password } = await request.json();
+        // Get API keys from KV
+        const keys = await env.TEACHERS.get('api_keys', { type: 'json' });
         
-        const { results } = await env.DB.prepare(`
-            SELECT * FROM teachers 
-            WHERE email = ? AND password = ?
-        `).bind(email, password).all();
+        if (!keys) {
+            return new Response(JSON.stringify({ error: 'No API keys found' }), {
+                status: 404,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...corsHeaders
+                }
+            });
+        }
 
-        if (!results || results.length === 0) {
-            return new Response(JSON.stringify({ error: 'Invalid credentials' }), {
+        return new Response(JSON.stringify(keys), {
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching API keys:', error);
+        return new Response(JSON.stringify({ 
+            error: 'Failed to fetch API keys',
+            message: error.message
+        }), {
+            status: 500,
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    }
+});
+
+// Get all links for a teacher
+router.get('/api/links', async (request, env) => {
+    try {
+        const user = await authenticate(request, env);
+        if (!user) {
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                 status: 401,
                 headers: { 
                     'Content-Type': 'application/json',
@@ -52,22 +83,23 @@ router.post('/api/auth/login', async (request, env) => {
             });
         }
 
+        const { results } = await env.DB.prepare(`
+            SELECT * FROM links WHERE teacher_id = ?
+            ORDER BY created_at DESC
+        `).bind(user.id).all();
+
+        return new Response(JSON.stringify(results || []), {
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching links:', error);
         return new Response(JSON.stringify({ 
-            token: results[0].id,
-            user: {
-                name: results[0].name,
-                email: results[0].email,
-                school: results[0].school
-            }
+            error: 'Failed to fetch links',
+            message: error.message
         }), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
-        });
-    } catch (error) {
-        console.error('Login error:', error);
-        return new Response(JSON.stringify({ error: 'Login failed' }), {
             status: 500,
             headers: { 
                 'Content-Type': 'application/json',
@@ -77,63 +109,7 @@ router.post('/api/auth/login', async (request, env) => {
     }
 });
 
-router.post('/api/auth/register', async (request, env) => {
-    try {
-        const { name, email, password, school } = await request.json();
-        
-        const result = await env.DB.prepare(`
-            INSERT INTO teachers (name, email, password, school)
-            VALUES (?, ?, ?, ?)
-        `).bind(name, email, password, school).run();
-
-        if (!result.success) {
-            throw new Error('Failed to register');
-        }
-
-        return new Response(JSON.stringify({ success: true }), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
-        });
-    } catch (error) {
-        console.error('Registration error:', error);
-        return new Response(JSON.stringify({ error: 'Registration failed' }), {
-            status: 500,
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
-        });
-    }
-});
-
-router.get('/api/auth/verify', async (request, env) => {
-    const user = await authenticate(request, env);
-    if (!user) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-            status: 401,
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
-        });
-    }
-
-    return new Response(JSON.stringify({ 
-        user: {
-            name: user.name,
-            email: user.email,
-            school: user.school
-        }
-    }), {
-        headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders
-        }
-    });
-});
-
+// Create a new link
 router.post('/api/links', async (request, env) => {
     try {
         const user = await authenticate(request, env);
@@ -164,9 +140,9 @@ router.post('/api/links', async (request, env) => {
         const id = crypto.randomUUID();
         
         const result = await env.DB.prepare(`
-            INSERT INTO links (id, teacher_id, subject, prompt)
-            VALUES (?, ?, ?, ?)
-        `).bind(id, user.id, subject, prompt).run();
+            INSERT INTO links (id, teacher_id, mode, subject, prompt)
+            VALUES (?, ?, ?, ?, ?)
+        `).bind(id, user.id, mode, subject, prompt).run();
 
         if (!result.success) {
             throw new Error('Failed to create link');
@@ -200,6 +176,7 @@ router.post('/api/links', async (request, env) => {
     }
 });
 
+// Get a specific link
 router.get('/api/links/:id', async (request, env) => {
     try {
         const url = new URL(request.url);
@@ -306,43 +283,6 @@ router.get('*', async (request, env) => {
         return new Response(`Internal Server Error: ${error.message}`, { 
             status: 500,
             headers: { 'Content-Type': 'text/plain' }
-        });
-    }
-});
-
-// Add API key routes
-router.get('/api/keys', async (request, env) => {
-    try {
-        // Get API keys from KV
-        const keys = await env.TEACHERS.get('api_keys', { type: 'json' });
-        
-        if (!keys) {
-            return new Response(JSON.stringify({ error: 'No API keys found' }), {
-                status: 404,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
-                }
-            });
-        }
-
-        return new Response(JSON.stringify(keys), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
-        });
-    } catch (error) {
-        console.error('Error fetching API keys:', error);
-        return new Response(JSON.stringify({ 
-            error: 'Failed to fetch API keys',
-            message: error.message
-        }), {
-            status: 500,
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
         });
     }
 });
