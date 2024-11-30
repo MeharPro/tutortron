@@ -59,6 +59,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const messageInput = document.getElementById('messageInput');
     const sendButton = document.getElementById('sendMessage');
     const loadingDiv = document.getElementById('loading');
+    const speakButton = document.getElementById('speakButton');
+    const copyButton = document.getElementById('copyButton');
     
     // State variables
     const conversationHistory = [];
@@ -68,6 +70,142 @@ document.addEventListener("DOMContentLoaded", async () => {
     let consoleErrors = [];
     let isProcessing = false;
     let mathJaxReady = false;
+
+    // Function to speak text
+    async function speakText(text) {
+        if (!window.speechSynthesis) {
+            showError('Speech synthesis is not supported in your browser');
+            return;
+        }
+
+        // Cancel any ongoing speech
+        if (currentSpeech) {
+            window.speechSynthesis.cancel();
+        }
+
+        // Clean text for speech (remove code blocks, URLs, etc.)
+        const cleanText = text.replace(/```[\s\S]*?```/g, 'code block omitted')
+                             .replace(/http[s]?:\/\/\S+/g, 'URL omitted')
+                             .replace(/\*\*(.*?)\*\*/g, '$1')
+                             .replace(/\*(.*?)\*/g, '$1');
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+
+        // Get available voices and select a good one
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(voice => 
+            voice.name.includes('Google') || 
+            voice.name.includes('Natural') || 
+            voice.name.includes('Female')
+        ) || voices[0];
+        
+        if (preferredVoice) {
+            utterance.voice = preferredVoice;
+        }
+
+        // Update button state
+        speakButton.innerHTML = '<span>🔊</span> Stop Speaking';
+        isSpeaking = true;
+
+        // Handle speech events
+        utterance.onend = () => {
+            isSpeaking = false;
+            currentSpeech = null;
+            speakButton.innerHTML = '<span>🔊</span> Speak Response';
+        };
+
+        utterance.onerror = (event) => {
+            console.error('Speech error:', event);
+            isSpeaking = false;
+            currentSpeech = null;
+            speakButton.innerHTML = '<span>🔊</span> Speak Response';
+            showError('Failed to speak text');
+        };
+
+        currentSpeech = utterance;
+        window.speechSynthesis.speak(utterance);
+    }
+
+    // Add speak button functionality
+    speakButton.addEventListener('click', () => {
+        if (isSpeaking) {
+            window.speechSynthesis.cancel();
+            isSpeaking = false;
+            speakButton.innerHTML = '<span>🔊</span> Speak Response';
+            return;
+        }
+
+        const messages = document.querySelectorAll('.ai-message');
+        if (messages.length === 0) {
+            showError('No AI responses to speak');
+            return;
+        }
+
+        const lastMessage = messages[messages.length - 1];
+        speakText(lastMessage.textContent);
+    });
+
+    // Add copy chat functionality
+    copyButton.addEventListener('click', async () => {
+        const messages = Array.from(chatContainer.children).map(msg => {
+            const role = msg.classList.contains('user-message') ? 'You' : 'Tutor';
+            return `${role}: ${msg.textContent}`;
+        });
+        
+        const chatText = messages.join('\n\n');
+        
+        try {
+            // Try using the modern Clipboard API first
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(chatText);
+                showCopyNotification('Chat copied to clipboard!');
+            } else {
+                // Fallback for mobile devices and non-secure contexts
+                const textArea = document.createElement('textarea');
+                textArea.value = chatText;
+                
+                // Make the textarea visible but off-screen for mobile
+                textArea.style.position = 'fixed';
+                textArea.style.opacity = '0';
+                textArea.style.left = '0';
+                textArea.style.top = '0';
+                document.body.appendChild(textArea);
+                
+                // Select the text for iOS
+                textArea.focus();
+                textArea.select();
+                textArea.setSelectionRange(0, 99999); // For mobile devices
+                
+                try {
+                    // Execute copy command
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        showCopyNotification('Chat copied to clipboard!');
+                    } else {
+                        throw new Error('Copy command failed');
+                    }
+                } catch (err) {
+                    console.error('Fallback copy failed:', err);
+                    // Show a different message on mobile devices
+                    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+                        showError('Please select and copy the text manually');
+                        textArea.style.opacity = '1'; // Make textarea visible
+                        textArea.style.zIndex = '9999';
+                    } else {
+                        throw new Error('Copy failed');
+                    }
+                } finally {
+                    textArea.remove();
+                }
+            }
+        } catch (err) {
+            console.error('Failed to copy:', err);
+            showError('Failed to copy chat to clipboard');
+        }
+    });
 
     // Get API keys
     let apiKeys;
@@ -555,113 +693,4 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     `;
     document.head.appendChild(mathJaxStyle);
-
-    // Add speech synthesis functionality
-    let isSpeaking = false;
-    let currentSpeech = null;
-
-    // Function to speak text
-    async function speakText(text) {
-        if (!window.speechSynthesis) {
-            showError('Speech synthesis is not supported in your browser');
-            return;
-        }
-
-        // Cancel any ongoing speech
-        if (currentSpeech) {
-            window.speechSynthesis.cancel();
-        }
-
-        // Clean text for speech (remove code blocks, URLs, etc.)
-        const cleanText = text.replace(/```[\s\S]*?```/g, 'code block omitted')
-                             .replace(/http[s]?:\/\/\S+/g, 'URL omitted')
-                             .replace(/\*\*(.*?)\*\*/g, '$1')
-                             .replace(/\*(.*?)\*/g, '$1');
-
-        const utterance = new SpeechSynthesisUtterance(cleanText);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-
-        // Get available voices and select a good one
-        const voices = window.speechSynthesis.getVoices();
-        const preferredVoice = voices.find(voice => 
-            voice.name.includes('Google') || 
-            voice.name.includes('Natural') || 
-            voice.name.includes('Female')
-        ) || voices[0];
-        
-        if (preferredVoice) {
-            utterance.voice = preferredVoice;
-        }
-
-        // Update button state
-        const speakButton = document.getElementById('speakButton');
-        speakButton.innerHTML = '<span>🔊</span> Stop Speaking';
-        isSpeaking = true;
-
-        // Handle speech events
-        utterance.onend = () => {
-            isSpeaking = false;
-            currentSpeech = null;
-            speakButton.innerHTML = '<span>🔊</span> Speak Response';
-        };
-
-        utterance.onerror = (event) => {
-            console.error('Speech error:', event);
-            isSpeaking = false;
-            currentSpeech = null;
-            speakButton.innerHTML = '<span>🔊</span> Speak Response';
-            showError('Failed to speak text');
-        };
-
-        currentSpeech = utterance;
-        window.speechSynthesis.speak(utterance);
-    }
-
-    // Add speak button functionality
-    document.getElementById('speakButton').addEventListener('click', () => {
-        if (isSpeaking) {
-            window.speechSynthesis.cancel();
-            isSpeaking = false;
-            document.getElementById('speakButton').innerHTML = '<span>🔊</span> Speak Response';
-            return;
-        }
-
-        const messages = document.querySelectorAll('.ai-message');
-        if (messages.length === 0) {
-            showError('No AI responses to speak');
-            return;
-        }
-
-        const lastMessage = messages[messages.length - 1];
-        speakText(lastMessage.textContent);
-    });
-
-    // Add copy chat functionality
-    document.getElementById('copyButton').addEventListener('click', async () => {
-        const chatContainer = document.getElementById('chatContainer');
-        let chatText = '';
-
-        // Get all messages
-        const messages = chatContainer.querySelectorAll('.message');
-        messages.forEach(message => {
-            const role = message.classList.contains('user-message') ? 'You' : 'AI';
-            const content = message.textContent.trim();
-            chatText += `${role}: ${content}\n\n`;
-        });
-
-        try {
-            await navigator.clipboard.writeText(chatText);
-            const copyButton = document.getElementById('copyButton');
-            const originalText = copyButton.innerHTML;
-            copyButton.innerHTML = '<span>✅</span> Copied!';
-            setTimeout(() => {
-                copyButton.innerHTML = originalText;
-            }, 2000);
-        } catch (error) {
-            console.error('Failed to copy chat:', error);
-            showError('Failed to copy chat to clipboard');
-        }
-    });
 }); 
