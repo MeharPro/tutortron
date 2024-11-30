@@ -50,7 +50,7 @@ function uploadFile(filePath) {
             const contentType = getContentType(filePath);
             const encodedContent = encodeForSQL(content);
             
-            const command = `wrangler d1 execute tutortron --command="INSERT OR REPLACE INTO files (path, content, content_type) VALUES ('${fullPath}', '${encodedContent}', '${contentType}');"`;
+            const command = `wrangler d1 execute tutortron --command="INSERT OR REPLACE INTO files (path, content, content_type) VALUES ('${fullPath}', '${encodedContent}', '${contentType}');" --remote`;
             
             exec(command, (error, stdout, stderr) => {
                 if (error) {

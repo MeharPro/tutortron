@@ -240,54 +240,74 @@ router.get('/api/links/:id', async (request, env) => {
     }
 });
 
+// Function to decode base64 content
+function decodeBase64(base64) {
+    try {
+        const binaryString = atob(base64);
+        return new TextDecoder().decode(new Uint8Array([...binaryString].map(c => c.charCodeAt(0))));
+    } catch (error) {
+        console.error('Error decoding base64:', error);
+        throw error;
+    }
+}
+
 // Serve static files
 router.get('*', async (request, env) => {
-    const url = new URL(request.url);
-    const path = url.pathname;
+    try {
+        const url = new URL(request.url);
+        const path = url.pathname;
 
-    // Handle mode-specific routes
-    const modeMatch = path.match(/^\/(investigator|comparitor|codebreaker|quest|eliminator)\/([^\/]+)$/);
-    if (modeMatch) {
-        const [, mode, id] = modeMatch;
-        
-        // Check if link exists
+        // Handle mode-specific routes
+        const modeMatch = path.match(/^\/(investigator|comparitor|codebreaker|quest|eliminator)\/([^\/]+)$/);
+        if (modeMatch) {
+            const [, mode, id] = modeMatch;
+            
+            // Check if link exists
+            const { results: linkResults } = await env.DB.prepare(`
+                SELECT id FROM links WHERE id = ?
+            `).bind(id).all();
+
+            if (!linkResults || linkResults.length === 0) {
+                return new Response('Link not found', { status: 404 });
+            }
+
+            // Get tutor.html from D1
+            const { results: fileResults } = await env.DB.prepare(`
+                SELECT content, content_type FROM files WHERE path = ?
+            `).bind('public/tutor.html').all();
+
+            if (!fileResults || fileResults.length === 0) {
+                return new Response('File not found', { status: 404 });
+            }
+
+            const content = decodeBase64(fileResults[0].content);
+            return new Response(content, {
+                headers: { 'Content-Type': fileResults[0].content_type }
+            });
+        }
+
+        // Serve static files from D1
+        const filePath = path === '/' ? '/index.html' : path;
         const { results } = await env.DB.prepare(`
-            SELECT id FROM links WHERE id = ?
-        `).bind(id).all();
+            SELECT content, content_type FROM files WHERE path = ?
+        `).bind(`public${filePath}`).all();
 
         if (!results || results.length === 0) {
-            return new Response('Link not found', { status: 404 });
+            console.error(`File not found: public${filePath}`);
+            return new Response('Not found', { status: 404 });
         }
 
-        // Get tutor.html from D1
-        const { results: fileResults } = await env.DB.prepare(`
-            SELECT content, content_type FROM files WHERE path = ?
-        `).bind('public/tutor.html').all();
-
-        if (!fileResults || fileResults.length === 0) {
-            return new Response('File not found', { status: 404 });
-        }
-
-        const content = Buffer.from(fileResults[0].content, 'base64').toString('utf-8');
+        const content = decodeBase64(results[0].content);
         return new Response(content, {
-            headers: { 'Content-Type': fileResults[0].content_type }
+            headers: { 'Content-Type': results[0].content_type }
+        });
+    } catch (error) {
+        console.error('Error serving file:', error);
+        return new Response(`Internal Server Error: ${error.message}`, { 
+            status: 500,
+            headers: { 'Content-Type': 'text/plain' }
         });
     }
-
-    // Serve static files from D1
-    const filePath = path === '/' ? '/index.html' : path;
-    const { results } = await env.DB.prepare(`
-        SELECT content, content_type FROM files WHERE path = ?
-    `).bind(`public${filePath}`).all();
-
-    if (!results || results.length === 0) {
-        return new Response('Not found', { status: 404 });
-    }
-
-    const content = Buffer.from(results[0].content, 'base64').toString('utf-8');
-    return new Response(content, {
-        headers: { 'Content-Type': results[0].content_type }
-    });
 });
 
 export default {
