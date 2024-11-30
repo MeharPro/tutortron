@@ -134,7 +134,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     'X-Title': 'Tutor-Tron'
                 },
                 body: JSON.stringify({
-                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-sonnet-vision',
+                    model: getRandomModel(),
                     messages: conversationHistory,
                     temperature: 0.7,
                     max_tokens: 400
@@ -298,7 +298,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     'X-Title': 'Tutor-Tron'
                 },
                 body: JSON.stringify({
-                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-sonnet-vision',
+                    model: VISION_MODEL,
                     messages: conversationHistory,
                     temperature: 0.7,
                     max_tokens: 400
