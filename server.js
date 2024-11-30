@@ -610,7 +610,7 @@ router.post('/api/chat', async (request, env) => {
         const messages = [
             {
                 role: "system",
-                content: `You are a tutor helping a student with ${subject}. ${prompt}`
+                content: `You are a teacher named, Tutor-Tron helping a student with ${subject}. ${prompt}`
             }
         ];
 
@@ -639,7 +639,7 @@ router.post('/api/chat', async (request, env) => {
         }
 
         // Use vision model if image is present
-        const selectedModel = image ? 'anthropic/claude-3-haiku-vision' : model;
+        const selectedModel = image ? 'meta-llama/llama-3.2-90b-vision-instruct:free' : model;
 
         console.log('Using model:', selectedModel); // Debug log
         console.log('Messages:', JSON.stringify(messages)); // Debug log
