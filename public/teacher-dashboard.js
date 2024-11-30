@@ -712,7 +712,11 @@ function addLinkCard(link) {
     
     // Insert at the beginning of the list
     const linksList = document.getElementById('linksList');
-    linksList.insertBefore(linkCard, linksList.firstChild);
+    if (linksList.firstChild) {
+        linksList.insertBefore(linkCard, linksList.firstChild);
+    } else {
+        linksList.appendChild(linkCard);
+    }
 }
 
 // Load user's links
@@ -743,7 +747,22 @@ async function loadLinks() {
         linksList.innerHTML = '';
 
         // Add links in sorted order
-        links.forEach(link => addLinkCard(link));
+        links.forEach(link => {
+            const linkCard = document.createElement('div');
+            linkCard.className = `link-card ${link.mode.toLowerCase()}`;
+            linkCard.innerHTML = `
+                <h3>
+                    ${link.subject}
+                    <span class="mode-indicator ${link.mode.toLowerCase()}">${link.mode}</span>
+                </h3>
+                <div class="link-url">${window.location.origin}/${link.mode.toLowerCase()}/${link.id}</div>
+                <div class="button-group">
+                    <button class="copy-link-btn" onclick="copyLink('${link.id}')">Copy Link</button>
+                    <button class="delete-link-btn" onclick="deleteLink('${link.id}')">Delete Link</button>
+                </div>
+            `;
+            linksList.appendChild(linkCard);
+        });
     } catch (error) {
         console.error('Error loading links:', error);
     }

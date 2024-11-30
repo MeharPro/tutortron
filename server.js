@@ -185,88 +185,41 @@ router.get('/api/keys', async (request, env) => {
     }
 });
 
-// Get all links for a teacher
+// Get links endpoint
 router.get('/api/links', async (request, env) => {
     try {
-        const user = await authenticate(request, env);
-        if (!user) {
-            console.error('No authenticated user found');
+        const token = request.headers.get('Authorization')?.split(' ')[1];
+        if (!token) {
             return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                 status: 401,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
-                }
+                headers: { 'Content-Type': 'application/json' }
             });
         }
 
-        console.log('Getting links for user:', user.email);
-
-        // Get links from D1
-        const d1Result = await env.DB.prepare(`
-            SELECT * FROM links WHERE user_email = ? ORDER BY created_at DESC
-        `).bind(user.email).all();
-        
-        console.log('D1 query result:', d1Result);
-        const d1Links = d1Result.results || [];
-        console.log('D1 links:', d1Links);
-
-        // Get links from KV
-        const kvLinks = user.links || [];
-        console.log('KV links:', kvLinks);
-
-        // Combine and deduplicate links
-        const allLinks = [...d1Links];
-        for (const kvLink of kvLinks) {
-            if (!allLinks.some(link => link.id === kvLink.id)) {
-                // Store KV link in D1 for future access
-                try {
-                    await env.DB.prepare(`
-                        INSERT INTO links (id, mode, subject, prompt, created_at, user_email)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    `).bind(
-                        kvLink.id,
-                        kvLink.mode,
-                        kvLink.subject,
-                        kvLink.prompt,
-                        kvLink.created || kvLink.created_at,
-                        user.email
-                    ).run();
-                } catch (error) {
-                    console.error('Error migrating KV link to D1:', error);
-                }
-                allLinks.push(kvLink);
-            }
+        // Get user from token
+        const user = await env.TEACHERS.get(token, { type: 'json' });
+        if (!user) {
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' }
+            });
         }
-        console.log('Combined links:', allLinks);
 
-        // Sort by created date
-        allLinks.sort((a, b) => {
-            const dateA = new Date(a.created_at || a.created);
-            const dateB = new Date(b.created_at || b.created);
-            return dateB - dateA;
-        });
+        // Get links from D1, ordered by creation date
+        const { results } = await env.DB.prepare(`
+            SELECT * FROM links 
+            WHERE user_email = ? 
+            ORDER BY created_at DESC
+        `).bind(user.email).all();
 
-        return new Response(JSON.stringify(allLinks), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+        return new Response(JSON.stringify(results || []), {
+            headers: { 'Content-Type': 'application/json' }
         });
     } catch (error) {
-        console.error('Error fetching links:', error);
-        console.error('Error stack:', error.stack);
-        return new Response(JSON.stringify({ 
-            error: 'Failed to fetch links',
-            message: error.message,
-            stack: error.stack,
-            cause: error.cause
-        }), {
+        console.error('Error getting links:', error);
+        return new Response(JSON.stringify({ error: 'Failed to get links' }), {
             status: 500,
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
     }
 });
