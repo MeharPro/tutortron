@@ -362,6 +362,25 @@ router.get('*', async (request, env) => {
         const url = new URL(request.url);
         const path = url.pathname;
 
+        // Special case for invalid-link.html
+        if (path === '/invalid-link.html') {
+            const { results } = await env.DB.prepare(`
+                SELECT content, content_type FROM files WHERE path = ?
+            `).bind('public/invalid-link.html').all();
+
+            if (!results || results.length === 0) {
+                return new Response('Invalid link', { 
+                    status: 404,
+                    headers: { 'Content-Type': 'text/plain' }
+                });
+            }
+
+            const content = decodeBase64(results[0].content);
+            return new Response(content, {
+                headers: { 'Content-Type': results[0].content_type }
+            });
+        }
+
         // Handle mode-specific routes
         const modeMatch = path.match(/^\/(investigator|comparitor|codebreaker|quest|eliminator)\/([^\/]+)$/);
         if (modeMatch) {
@@ -388,37 +407,14 @@ router.get('*', async (request, env) => {
             }
 
             if (!link) {
-                // Serve invalid-link.html
-                const { results: fileResults } = await env.DB.prepare(`
-                    SELECT content, content_type FROM files WHERE path = ?
-                `).bind('public/invalid-link.html').all();
-
-                if (!fileResults || fileResults.length === 0) {
-                    return new Response('Invalid link', { status: 404 });
-                }
-
-                const content = decodeBase64(fileResults[0].content);
-                return new Response(content, {
-                    headers: { 'Content-Type': fileResults[0].content_type }
-                });
+                // Redirect to invalid-link.html
+                return Response.redirect(`${url.origin}/invalid-link.html`, 302);
             }
 
             // Verify mode matches
             if (link.mode.toLowerCase() !== mode.toLowerCase()) {
                 console.error(`Mode mismatch: URL has ${mode}, link has ${link.mode}`);
-                // Serve invalid-link.html
-                const { results: fileResults } = await env.DB.prepare(`
-                    SELECT content, content_type FROM files WHERE path = ?
-                `).bind('public/invalid-link.html').all();
-
-                if (!fileResults || fileResults.length === 0) {
-                    return new Response('Invalid link', { status: 404 });
-                }
-
-                const content = decodeBase64(fileResults[0].content);
-                return new Response(content, {
-                    headers: { 'Content-Type': fileResults[0].content_type }
-                });
+                return Response.redirect(`${url.origin}/invalid-link.html`, 302);
             }
 
             // Get tutor.html from D1
@@ -433,15 +429,15 @@ router.get('*', async (request, env) => {
             // Replace placeholders in tutor.html
             let content = decodeBase64(fileResults[0].content);
             content = content.replace('{{SUBJECT}}', link.subject)
-                            .replace('{{PROMPT}}', link.prompt)
-                            .replace('{{MODE}}', link.mode);
+                           .replace('{{PROMPT}}', link.prompt)
+                           .replace('{{MODE}}', link.mode);
 
             return new Response(content, {
                 headers: { 'Content-Type': fileResults[0].content_type }
             });
         }
 
-        // Serve static files from D1
+        // Serve other static files from D1
         const filePath = path === '/' ? '/index.html' : path;
         const { results } = await env.DB.prepare(`
             SELECT content, content_type FROM files WHERE path = ?
