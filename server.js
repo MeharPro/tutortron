@@ -21,11 +21,9 @@ async function authenticate(request, env) {
 
     const token = authHeader.split(' ')[1];
     try {
-        const { results } = await env.DB.prepare(`
-            SELECT * FROM teachers WHERE id = ?
-        `).bind(token).all();
-        
-        return results[0] || null;
+        // Get user from KV
+        const user = await env.TEACHERS.get(token, { type: 'json' });
+        return user;
     } catch (error) {
         console.error('Auth error:', error);
         return null;
@@ -33,6 +31,116 @@ async function authenticate(request, env) {
 }
 
 // API Routes
+router.post('/api/auth/login', async (request, env) => {
+    try {
+        const { email, password } = await request.json();
+        
+        // Get user from KV
+        const user = await env.TEACHERS.get(email, { type: 'json' });
+        
+        if (!user || user.password !== password) {
+            return new Response(JSON.stringify({ error: 'Invalid credentials' }), {
+                status: 401,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...corsHeaders
+                }
+            });
+        }
+
+        return new Response(JSON.stringify({ 
+            token: email,
+            user: {
+                name: user.name,
+                email: user.email,
+                school: user.school
+            }
+        }), {
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        return new Response(JSON.stringify({ error: 'Login failed' }), {
+            status: 500,
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    }
+});
+
+router.post('/api/auth/register', async (request, env) => {
+    try {
+        const { name, email, password, school } = await request.json();
+        
+        // Check if user exists
+        const existingUser = await env.TEACHERS.get(email);
+        if (existingUser) {
+            return new Response(JSON.stringify({ error: 'Email already registered' }), {
+                status: 409,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...corsHeaders
+                }
+            });
+        }
+
+        // Store user in KV
+        await env.TEACHERS.put(email, JSON.stringify({
+            name,
+            email,
+            password,
+            school
+        }));
+
+        return new Response(JSON.stringify({ success: true }), {
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    } catch (error) {
+        console.error('Registration error:', error);
+        return new Response(JSON.stringify({ error: 'Registration failed' }), {
+            status: 500,
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    }
+});
+
+router.get('/api/auth/verify', async (request, env) => {
+    const user = await authenticate(request, env);
+    if (!user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401,
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    }
+
+    return new Response(JSON.stringify({ 
+        user: {
+            name: user.name,
+            email: user.email,
+            school: user.school
+        }
+    }), {
+        headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders
+        }
+    });
+});
+
 router.get('/api/keys', async (request, env) => {
     try {
         // Get API keys from KV
@@ -83,12 +191,10 @@ router.get('/api/links', async (request, env) => {
             });
         }
 
-        const { results } = await env.DB.prepare(`
-            SELECT * FROM links WHERE teacher_id = ?
-            ORDER BY created_at DESC
-        `).bind(user.id).all();
+        // Get links from KV
+        const links = await env.TEACHERS.get(`links:${user.email}`, { type: 'json' }) || [];
 
-        return new Response(JSON.stringify(results || []), {
+        return new Response(JSON.stringify(links), {
             headers: { 
                 'Content-Type': 'application/json',
                 ...corsHeaders
@@ -138,23 +244,30 @@ router.post('/api/links', async (request, env) => {
         }
 
         const id = crypto.randomUUID();
+        const link = {
+            id,
+            mode,
+            subject,
+            prompt,
+            created_at: new Date().toISOString(),
+            teacher_email: user.email
+        };
+
+        // Get existing links
+        const existingLinks = await env.TEACHERS.get(`links:${user.email}`, { type: 'json' }) || [];
         
-        const result = await env.DB.prepare(`
-            INSERT INTO links (id, teacher_id, mode, subject, prompt)
-            VALUES (?, ?, ?, ?, ?)
-        `).bind(id, user.id, mode, subject, prompt).run();
+        // Add new link
+        existingLinks.unshift(link);
 
-        if (!result.success) {
-            throw new Error('Failed to create link');
-        }
+        // Store updated links
+        await env.TEACHERS.put(`links:${user.email}`, JSON.stringify(existingLinks));
 
-        const { results } = await env.DB.prepare(`
-            SELECT * FROM links WHERE id = ?
-        `).bind(id).all();
+        // Store individual link for quick access
+        await env.TEACHERS.put(`link:${id}`, JSON.stringify(link));
 
         return new Response(JSON.stringify({ 
             success: true,
-            link: results[0]
+            link
         }), {
             headers: { 
                 'Content-Type': 'application/json',
@@ -182,11 +295,10 @@ router.get('/api/links/:id', async (request, env) => {
         const url = new URL(request.url);
         const id = url.pathname.split('/').pop();
         
-        const { results } = await env.DB.prepare(`
-            SELECT * FROM links WHERE id = ?
-        `).bind(id).all();
+        // Get link from KV
+        const link = await env.TEACHERS.get(`link:${id}`, { type: 'json' });
 
-        if (!results || results.length === 0) {
+        if (!link) {
             return new Response(JSON.stringify({ error: 'Link not found' }), {
                 status: 404,
                 headers: { 
@@ -196,7 +308,7 @@ router.get('/api/links/:id', async (request, env) => {
             });
         }
 
-        return new Response(JSON.stringify(results[0]), {
+        return new Response(JSON.stringify(link), {
             headers: { 
                 'Content-Type': 'application/json',
                 ...corsHeaders
@@ -240,11 +352,8 @@ router.get('*', async (request, env) => {
             const [, mode, id] = modeMatch;
             
             // Check if link exists
-            const { results: linkResults } = await env.DB.prepare(`
-                SELECT id FROM links WHERE id = ?
-            `).bind(id).all();
-
-            if (!linkResults || linkResults.length === 0) {
+            const link = await env.TEACHERS.get(`link:${id}`, { type: 'json' });
+            if (!link) {
                 return new Response('Link not found', { status: 404 });
             }
 
