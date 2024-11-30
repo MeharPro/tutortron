@@ -5,14 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "wrangler dev",
-    "clear-kv": "wrangler kv:key list --binding=FILES | jq -r '.[].name' | xargs -I {} wrangler kv:key delete --binding=FILES {}",
     "deploy": "git add . && git diff-index --quiet HEAD || git commit -m \"Auto-deploy update $(date)\" && git push origin main && wrangler deploy && npm run upload",
     "deploy:prod": "git add . && git diff-index --quiet HEAD || git commit -m \"Production deploy $(date)\" && git push origin main && wrangler deploy --env production && npm run upload",
     "build": "echo 'No build step required'",
-    "upload": "node upload-files.js",
-    "full-deploy": "npm run clear-kv && npx wrangler deploy && npm run upload",
-    "reset-deploy": "npm run clear-kv && npm run deploy",
-    "no-kv": "npx wrangler deploy && git add . && git diff-index --quiet HEAD || git commit -m \"Auto-deploy update $(date)\" && git push origin main"
+    "upload": "node upload-files.js"
   },
   "dependencies": {
     "@cloudflare/kv-asset-handler": "^0.3.4",

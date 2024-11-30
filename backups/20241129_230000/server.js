@@ -240,6 +240,41 @@ router.get('/api/links/:id', async (request, env) => {
     }
 });
 
+// File upload endpoint
+router.post('/api/files', async (request, env) => {
+    try {
+        const { path, content, content_type } = await request.json();
+        
+        const result = await env.DB.prepare(`
+            INSERT OR REPLACE INTO files (path, content, content_type)
+            VALUES (?, ?, ?)
+        `).bind(path, content, content_type).run();
+
+        if (!result.success) {
+            throw new Error('Failed to store file');
+        }
+
+        return new Response(JSON.stringify({ success: true }), {
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    } catch (error) {
+        console.error('Error storing file:', error);
+        return new Response(JSON.stringify({ 
+            error: 'Failed to store file',
+            message: error.message
+        }), {
+            status: 500,
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    }
+});
+
 // Serve static files
 router.get('*', async (request, env) => {
     const url = new URL(request.url);
@@ -265,11 +300,10 @@ router.get('*', async (request, env) => {
         `).bind('public/tutor.html').all();
 
         if (!fileResults || fileResults.length === 0) {
-            return new Response('File not found', { status: 404 });
+            return new Response('Tutor page not found', { status: 404 });
         }
 
-        const content = Buffer.from(fileResults[0].content, 'base64').toString('utf-8');
-        return new Response(content, {
+        return new Response(Buffer.from(fileResults[0].content, 'base64').toString(), {
             headers: { 'Content-Type': fileResults[0].content_type }
         });
     }
@@ -279,13 +313,12 @@ router.get('*', async (request, env) => {
     const { results } = await env.DB.prepare(`
         SELECT content, content_type FROM files WHERE path = ?
     `).bind(`public${filePath}`).all();
-
+    
     if (!results || results.length === 0) {
         return new Response('Not found', { status: 404 });
     }
 
-    const content = Buffer.from(results[0].content, 'base64').toString('utf-8');
-    return new Response(content, {
+    return new Response(Buffer.from(results[0].content, 'base64').toString(), {
         headers: { 'Content-Type': results[0].content_type }
     });
 });
