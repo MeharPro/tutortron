@@ -57,22 +57,72 @@ document.addEventListener("DOMContentLoaded", async () => {
     let isProcessing = false;
     let mathJaxReady = false;
 
+    // Get API keys
+    let apiKeys;
+    try {
+        const response = await fetch('/api/keys');
+        apiKeys = await response.json();
+    } catch (error) {
+        console.error('Failed to fetch API keys:', error);
+        showError('Failed to initialize the tutor. Please try again later.');
+        return;
+    }
+
     // Get configuration from window.TUTOR_CONFIG
     const { subject, prompt, mode } = window.TUTOR_CONFIG;
     
     // Set mode-specific styling
     document.body.classList.add(mode.toLowerCase());
     
-    // Initialize conversation with the prompt
+    // Initialize conversation with the prompt and get first response
     if (prompt) {
-        const systemMessage = {
-            role: "system",
-            content: `You are a tutor helping a student with ${subject}. ${prompt}`
-        };
-        conversationHistory.push(systemMessage);
-        
-        // Display welcome message
-        appendMessage('ai', `Welcome! I'm here to help you with ${subject}. Let's begin!`);
+        isProcessing = true;
+        if (loadingDiv) loadingDiv.style.display = 'block';
+
+        try {
+            const systemMessage = {
+                role: "system",
+                content: `You are a tutor helping a student with ${subject}. ${prompt}`
+            };
+            conversationHistory.push(systemMessage);
+
+            // Get initial response from AI
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
+                    'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+                    'X-Title': 'Tutor-Tron'
+                },
+                body: JSON.stringify({
+                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-opus',
+                    messages: conversationHistory,
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to get AI response');
+            }
+
+            const data = await response.json();
+            const aiMessage = data.choices[0].message.content;
+            
+            // Add AI's response to conversation history
+            conversationHistory.push({
+                role: "assistant",
+                content: aiMessage
+            });
+
+            // Display the AI's response
+            appendMessage('ai', aiMessage);
+        } catch (error) {
+            console.error('Error getting initial response:', error);
+            showError('Failed to initialize the tutor. Please try again later.');
+        } finally {
+            isProcessing = false;
+            if (loadingDiv) loadingDiv.style.display = 'none';
+        }
     }
 
     // Error tracking setup
