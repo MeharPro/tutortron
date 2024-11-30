@@ -200,6 +200,94 @@ function appendMessage(type, content) {
     });
 }
 
+// Add this after the appendMessage function and before the DOMContentLoaded event listener
+async function handleSendMessage() {
+    if (isProcessing) return;
+    
+    const messageInput = document.getElementById('messageInput');
+    const message = messageInput.value.trim();
+    
+    if (!message) return;
+    
+    isProcessing = true;
+    showLoading();
+
+    // Display user message immediately
+    appendMessage('user', message);
+    
+    try {
+        // Try each model until one works
+        let success = false;
+        let data;
+        
+        while (!success && currentModelIndex < FREE_MODELS.length) {
+            try {
+                const model = FREE_MODELS[currentModelIndex];
+                console.log('Trying model:', model);
+                
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message,
+                        subject: window.TUTOR_CONFIG.subject,
+                        prompt: window.TUTOR_CONFIG.prompt,
+                        mode: window.TUTOR_CONFIG.mode,
+                        model,
+                        messageHistory
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('API Error:', response.status, errorData);
+                    throw new Error(`API returned ${response.status}`);
+                }
+
+                data = await response.json();
+                if (!data || !data.response) {
+                    console.error('Invalid API response:', data);
+                    throw new Error('Invalid API response format');
+                }
+
+                // Update message history with the new response
+                messageHistory = data.messageHistory || messageHistory;
+                
+                success = true;
+                currentModelIndex = 0; // Reset on success
+                
+            } catch (error) {
+                console.error(`Error with model ${FREE_MODELS[currentModelIndex]}:`, error);
+                currentModelIndex++;
+                
+                if (currentModelIndex >= FREE_MODELS.length) {
+                    throw new Error('All models failed');
+                }
+            }
+        }
+
+        if (!success) {
+            throw new Error('Failed to get response from any model');
+        }
+
+        // Display AI response
+        appendMessage('ai', data.response);
+        
+        // Clear input
+        messageInput.value = '';
+        
+    } catch (error) {
+        console.error('Error getting AI response:', error);
+        showError('Failed to get response. Please try again.');
+        currentModelIndex = 0; // Reset index after all attempts fail
+    } finally {
+        isProcessing = false;
+        hideLoading();
+    }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     await window.envLoaded;
     
