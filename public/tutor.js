@@ -62,198 +62,119 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     // State variables
     const conversationHistory = [];
-    let currentImage = null;
-    let isSpeaking = false;
-    let currentSpeech = null;
-    let consoleErrors = [];
     let isProcessing = false;
     let mathJaxReady = false;
     let currentAudio = null;
+    let currentModelIndex = 0;
 
-    // Get API keys
-    let apiKeys;
-    try {
-        const response = await fetch('/api/keys');
-        apiKeys = await response.json();
-        if (!apiKeys || !apiKeys.OPENROUTER_API_KEY) {
-            throw new Error('API key not found');
-        }
-    } catch (error) {
-        console.error('Failed to fetch API keys:', error);
-        showError('Failed to initialize the tutor. Please try again later.');
-        return;
+    // Available free models
+    const FREE_MODELS = [
+        "google/learnlm-1.5-pro-experimental:free",
+        "meta-llama/llama-3.1-405b-instruct:free",
+        "liquid/lfm-40b:free",
+        "google/gemini-exp-1114",
+        "meta-llama/llama-3.1-70b-instruct:free",
+        "google/gemma-2-9b-it:free",
+        "qwen/qwen-2-7b-instruct:free"
+    ];
+
+    const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
+
+    // Function to get next model when one fails
+    function getNextModel() {
+        currentModelIndex = (currentModelIndex + 1) % FREE_MODELS.length;
+        return FREE_MODELS[currentModelIndex];
     }
 
-    // Get configuration from window.TUTOR_CONFIG
-    const { subject, prompt, mode } = window.TUTOR_CONFIG;
-    
-    // Set mode-specific styling
-    document.body.classList.add(mode.toLowerCase());
-    
-    // Get link ID from URL
-    const pathParts = window.location.pathname.split('/');
-    const linkId = pathParts[pathParts.length - 1];
+    // Function to make API request
+    async function makeModelRequest(messages, useVision = false) {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
+                'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+                'X-Title': 'Tutor-Tron'
+            },
+            body: JSON.stringify({
+                model: useVision ? VISION_MODEL : FREE_MODELS[currentModelIndex],
+                messages,
+                temperature: 0.7
+            })
+        });
 
-    // Initialize conversation with the prompt and get first response
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error.message || 'API Error');
+        }
+
+        if (!data.choices?.[0]?.message?.content && 
+            !data.choices?.[0]?.text && 
+            !data.choices?.[0]?.content) {
+            throw new Error('No response content');
+        }
+
+        return data.choices[0].message?.content || 
+               data.choices[0].text || 
+               data.choices[0].content;
+    }
+
+    // Function to try multiple models
+    async function tryModels(messages, useVision = false) {
+        let attempts = 0;
+        
+        while (attempts < FREE_MODELS.length) {
+            try {
+                const aiMessage = await makeModelRequest(messages, useVision);
+                return aiMessage;
+            } catch (error) {
+                console.error(`Error with model ${FREE_MODELS[currentModelIndex]}:`, error);
+                currentModelIndex = (currentModelIndex + 1) % FREE_MODELS.length;
+                attempts++;
+                
+                if (attempts === FREE_MODELS.length) {
+                    throw new Error('All models failed');
+                }
+            }
+        }
+    }
+
+    // Initialize conversation with prompt
     if (prompt) {
-        isProcessing = true;
-        if (loadingDiv) loadingDiv.style.display = 'block';
-
         try {
+            isProcessing = true;
+            if (loadingDiv) loadingDiv.style.display = 'block';
+
             const systemMessage = {
                 role: "system",
                 content: `You are a tutor helping a student with ${subject}. ${prompt}`
             };
             conversationHistory.push(systemMessage);
 
-            let currentModel = FREE_MODELS[currentModelIndex];
-            let success = false;
-            let attempts = 0;
+            const aiMessage = await tryModels([systemMessage]);
+            
+            conversationHistory.push({
+                role: "assistant",
+                content: aiMessage
+            });
 
-            while (!success && attempts < FREE_MODELS.length) {
-                try {
-                    // Get initial response from AI
-                    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
-                            'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
-                            'X-Title': 'Tutor-Tron'
-                        },
-                        body: JSON.stringify({
-                            model: currentModel,
-                            messages: conversationHistory,
-                            temperature: 0.7
-                        })
-                    });
+            appendMessage('ai', aiMessage);
 
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-
-                    const data = await response.json();
-                    
-                    if (data.error) {
-                        throw new Error(data.error.message || 'API Error');
-                    }
-
-                    let aiMessage;
-                    if (data.choices && data.choices[0]) {
-                        aiMessage = data.choices[0].message?.content || 
-                                  data.choices[0].text || 
-                                  data.choices[0].content;
-                                  
-                        if (!aiMessage) {
-                            throw new Error('No response content');
-                        }
-                    } else {
-                        throw new Error('Invalid response format');
-                    }
-
-                    // Add AI's response to conversation history
-                    conversationHistory.push({
-                        role: "assistant",
-                        content: aiMessage
-                    });
-
-                    // Display the AI's response
-                    appendMessage('ai', aiMessage);
-                    success = true;
-
-                } catch (error) {
-                    console.error(`Error with model ${currentModel}:`, error);
-                    currentModel = getNextModel();
-                    attempts++;
-                    
-                    if (attempts === FREE_MODELS.length) {
-                        throw new Error('All models failed');
-                    }
-                }
-            }
         } catch (error) {
-            console.error('Full error details:', error);
+            console.error('Initialization error:', error);
             showError(`Failed to get response from tutor: ${error.message}`);
-            throw error;
         } finally {
             isProcessing = false;
             if (loadingDiv) loadingDiv.style.display = 'none';
         }
     }
 
-    // Add image upload button to button group
-    const buttonGroup = document.querySelector('.button-group');
-    const imageButton = document.createElement('button');
-    imageButton.id = 'imageButton';
-    imageButton.innerHTML = '<span>🖼️</span> Add Image';
-    buttonGroup.appendChild(imageButton);
-
-    // Add file input for image upload
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'image/*';
-    fileInput.style.display = 'none';
-    document.body.appendChild(fileInput);
-
-    // Add image upload functionality
-    imageButton.addEventListener('click', () => {
-        fileInput.click();
-    });
-
-    fileInput.addEventListener('change', async (e) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit
-                showError('Image size must be less than 5MB');
-                return;
-            }
-
-            try {
-                // Show loading state
-                imageButton.disabled = true;
-                imageButton.innerHTML = '<span>🔄</span> Uploading...';
-
-                // Convert image to base64
-                const base64Image = await new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result);
-                    reader.readAsDataURL(file);
-                });
-
-                // Add image message to chat
-                appendMessage('user', `[Uploaded Image]\n${base64Image}`);
-
-                // Add to conversation history
-                conversationHistory.push({
-                    role: "user",
-                    content: [
-                        {
-                            type: "text",
-                            text: "I've uploaded an image. Please analyze it."
-                        },
-                        {
-                            type: "image_url",
-                            image_url: base64Image
-                        }
-                    ]
-                });
-
-                // Get AI response
-                await handleSendMessage(true);
-            } catch (error) {
-                console.error('Error uploading image:', error);
-                showError('Failed to upload image. Please try again.');
-            } finally {
-                // Reset button state
-                imageButton.disabled = false;
-                imageButton.innerHTML = '<span>🖼️</span> Add Image';
-                // Reset file input
-                fileInput.value = '';
-            }
-        }
-    });
-
-    // Update handleSendMessage to handle image messages
+    // Handle sending messages
     async function handleSendMessage(isImageMessage = false) {
         if (isProcessing || (!isImageMessage && !messageInput.value.trim())) return;
         
@@ -274,743 +195,51 @@ document.addEventListener("DOMContentLoaded", async () => {
                 messageInput.value = '';
             }
 
-            let currentModel = FREE_MODELS[currentModelIndex];
-            let success = false;
-            let attempts = 0;
+            const aiMessage = await tryModels(
+                conversationHistory,
+                isImageMessage
+            );
 
-            while (!success && attempts < FREE_MODELS.length) {
-                try {
-                    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
-                            'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
-                            'X-Title': 'Tutor-Tron'
-                        },
-                        body: JSON.stringify({
-                            model: isImageMessage ? VISION_MODEL : currentModel,
-                            messages: conversationHistory,
-                            temperature: 0.7
-                        })
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-
-                    const data = await response.json();
-                    
-                    if (data.error) {
-                        throw new Error(data.error.message || 'API Error');
-                    }
-
-                    let aiMessage;
-                    if (data.choices && data.choices[0]) {
-                        aiMessage = data.choices[0].message?.content || 
-                // Add user message to history
-                conversationHistory.push({
-                    role: "user",
-                    content: userMessage
-                });
-            }
-            
-            // Get AI response
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
-                    'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
-                    'X-Title': 'Tutor-Tron'
-                },
-                body: JSON.stringify({
-                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-sonnet-vision',
-                    messages: conversationHistory,
-                    temperature: 0.7,
-                    max_tokens: 400
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to get AI response');
-            }
-            
-            const data = await response.json();
-            const aiMessage = data.choices[0].message.content;
-            
-            // Add AI's response to history
             conversationHistory.push({
                 role: "assistant",
                 content: aiMessage
             });
-            
-            // Display the AI's response
+
             appendMessage('ai', aiMessage);
+            
         } catch (error) {
-            console.error('Error getting AI response:', error);
-            showError('Failed to get response from tutor. Please try again.');
+            console.error('Send message error:', error);
+            showError('Failed to get response. Please try again.');
         } finally {
             isProcessing = false;
             if (loadingDiv) loadingDiv.style.display = 'none';
         }
     }
 
-    // Add message input handlers
-    sendButton.addEventListener('click', handleSendMessage);
-    messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage();
-        }
-    });
+    // Event listeners
+    if (sendButton) {
+        sendButton.addEventListener('click', () => handleSendMessage());
+    }
 
-    // Add modal for image expansion
-    const modal = document.createElement('div');
-    modal.className = 'image-modal';
-    modal.style.display = 'none';
-    modal.onclick = () => modal.style.display = 'none';
-    document.body.appendChild(modal);
-
-    // Add modal styles
-    const modalStyle = document.createElement('style');
-    modalStyle.textContent = `
-        .image-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.9);
-            z-index: 1000;
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .image-modal img {
-            max-width: 90%;
-            max-height: 90%;
-            object-fit: contain;
-            border-radius: 8px;
-        }
-    `;
-    document.head.appendChild(modalStyle);
-
-    // Function to append messages to chat
-    function appendMessage(type, content) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${type}-message`;
-        
-        // Check for image URLs in the content
-        const imageUrlMatch = content.match(/https?:\/\/[^\s<>"]+?\.(?:jpg|jpeg|gif|png|webp)(?:\?[^\s<>"]+)?/gi);
-        
-        if (imageUrlMatch) {
-            // Remove image URLs from content
-            imageUrlMatch.forEach(url => {
-                content = content.replace(url, '');
-                // Create and append image element
-                const img = document.createElement('img');
-                img.src = url;
-                img.alt = 'Generated image';
-                img.className = 'generated-image';
-                // Add click handler for image expansion
-                img.onclick = (e) => {
-                    e.stopPropagation();
-                    modal.innerHTML = `<img src="${url}" alt="Expanded image">`;
-                    modal.style.display = 'flex';
-                };
-                messageDiv.appendChild(img);
-            });
-        }
-        
-        // Format content with MathJax and code highlighting
-        const formattedContent = formatMathContent(content);
-        messageDiv.innerHTML += formattedContent;
-        
-        chatContainer.appendChild(messageDiv);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-        
-        // Render MathJax if ready
-        if (mathJaxReady && window.MathJax) {
-            window.MathJax.typesetPromise([messageDiv]);
-        }
-        
-        // Apply code highlighting
-        messageDiv.querySelectorAll('pre code').forEach((block) => {
-            if (window.hljs) {
-                window.hljs.highlightElement(block);
+    if (messageInput) {
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
             }
         });
     }
 
-    // Function to format content with MathJax and code highlighting
-    function formatMathContent(content) {
-        // Language aliases mapping
-        const languageAliases = {
-            'cpp': 'cpp',
-            'c++': 'cpp',
-            'Cpp': 'cpp',
-            'CPP': 'cpp',
-            'py': 'python',
-            'python': 'python',
-            'Python': 'python',
-            'js': 'javascript',
-            'javascript': 'javascript',
-            'JavaScript': 'javascript',
-            'java': 'java',
-            'Java': 'java',
-            'cs': 'csharp',
-            'csharp': 'csharp',
-            'c#': 'csharp',
-            'C#': 'csharp'
-        };
-
-        // First protect code blocks from other formatting
-        const codeBlocks = [];
-        content = content.replace(/```([\w+]+)?\s*([\s\S]*?)```/g, (match, lang, code) => {
-            const normalizedLang = lang ? languageAliases[lang.trim()] || lang.toLowerCase() : '';
-            codeBlocks.push({ language: normalizedLang, code: code.trim() });
-            return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
-        });
-
-        // Handle LaTeX delimiters
-        content = content
-            .replace(/\\\((.*?)\\\)/g, '$ $1 $')
-            .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$')
-            .replace(/\$\$([\s\S]*?)\$\$/g, (match, tex) => {
-                return `<div class="math-display">$$ ${tex.trim()} $$</div>`;
-            })
-            .replace(/\$(.*?)\$/g, (match, tex) => {
-                return `<span class="math-inline">$ ${tex.trim()} $</span>`;
-            });
-
-        // Format bullet points
-        content = content.replace(/^\* /gm, '• ');
-
-        // Format headers
-        content = content
-            .replace(/^# (.*?)$/gm, '<h1>$1</h1>')
-            .replace(/^## (.*?)$/gm, '<h2>$1</h2>')
-            .replace(/^### (.*?)$/gm, '<h3>$1</h3>');
-
-        // Handle general formatting
-        content = content
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-        // Restore code blocks with syntax highlighting
-        content = content.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
-            const block = codeBlocks[parseInt(index)];
-            const formattedCode = block.code
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
-            return `<pre><code class="language-${block.language}">${formattedCode}</code></pre>`;
-        });
-
-        return content;
-    }
-
-    // Function to show errors
-    function showError(message) {
-        const errorDiv = document.getElementById('errorContainer');
-        const errorMessage = errorDiv.querySelector('.error-message');
-        errorMessage.textContent = message;
-        errorDiv.style.display = 'block';
-        setTimeout(() => {
-            errorDiv.style.display = 'none';
-        }, 5000);
-    }
-
-    // Add CSS for images
-    const style = document.createElement('style');
-    style.textContent = `
-        .generated-image {
-            max-width: 100%;
-            height: auto;
-            margin: 10px 0;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .message img {
-            display: block;
-            max-width: 100%;
-            margin: 10px auto;
-        }
-        
-        .message img:hover {
-            cursor: pointer;
-            transform: scale(1.02);
-            transition: transform 0.2s ease;
-        }
-    `;
-    document.head.appendChild(style);
-
-    // Add styles for image button
-    const imageButtonStyle = document.createElement('style');
-    imageButtonStyle.textContent = `
-        #imageButton {
-            background-color: #4a9d57;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-        }
-
-        #imageButton:hover {
-            background-color: #3c8746;
-        }
-
-        #imageButton:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-
-        #imageButton span {
-            font-size: 16px;
-        }
-    `;
-    document.head.appendChild(imageButtonStyle);
-
-    // Add MathJax styles
-    const mathJaxStyle = document.createElement('style');
-    mathJaxStyle.textContent = `
-        .math-display {
-            overflow-x: auto;
-            margin: 1em 0;
-            padding: 1em;
-            background: rgba(0, 0, 0, 0.03);
-            border-radius: 4px;
-        }
-        
-        .math-inline {
-            padding: 0 0.2em;
-        }
-        
-        .message .MathJax {
-            color: inherit;
-        }
-    `;
-    document.head.appendChild(mathJaxStyle);
-
-    // Speech synthesis using Deepgram
-    async function speakText(text) {
-        try {
-            const speakButton = document.getElementById('speakButton');
-            
-            // If already speaking, stop it
-            if (isSpeaking) {
-                if (currentAudio) {
-                    currentAudio.pause();
-                    currentAudio.currentTime = 0;
-                }
-                isSpeaking = false;
-                speakButton.innerHTML = '<span>🔊</span> Speak Response';
-                return;
+    // Add image upload UI and handlers
+    addImageUploadUI();
+    
+    const imageUpload = document.getElementById('imageUpload');
+    if (imageUpload) {
+        imageUpload.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                handleImageUpload(e.target.files[0]);
+                e.target.value = '';
             }
-
-            // Clean the text before sending to Deepgram
-            const cleanText = text.replace(/```[\s\S]*?```/g, '')
-                                 .replace(/`.*?`/g, '')
-                                 .replace(/\[.*?\]/g, '')
-                                 .replace(/\(.*?\)/g, '')
-                                 .replace(/#+\s/g, '')
-                                 .replace(/\*\*/g, '')
-                                 .replace(/\*/g, '');
-
-            // Get Deepgram API key from KV
-            const response = await fetch('/api/get-deepgram-key');
-            const { key } = await response.json();
-
-            if (!key) {
-                throw new Error('Deepgram API key not found');
-            }
-
-            // Call Deepgram TTS API
-            const ttsResponse = await fetch('https://api.deepgram.com/v1/speak', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Token ${key}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    text: cleanText,
-                    voice: 'nova',
-                    rate: 1.0,
-                    pitch: 1.0
-                })
-            });
-
-            if (!ttsResponse.ok) {
-                throw new Error('Failed to generate speech');
-            }
-
-            const audioBlob = await ttsResponse.blob();
-            const audioUrl = URL.createObjectURL(audioBlob);
-            
-            // Create and play audio
-            currentAudio = new Audio(audioUrl);
-            currentAudio.addEventListener('ended', () => {
-                isSpeaking = false;
-                speakButton.innerHTML = '<span>🔊</span> Speak Response';
-                URL.revokeObjectURL(audioUrl);
-            });
-
-            // Update button state and play
-            isSpeaking = true;
-            speakButton.innerHTML = '<span>⏹</span> Stop Speaking';
-            await currentAudio.play();
-
-        } catch (error) {
-            console.error('Speech synthesis error:', error);
-            alert('Failed to generate speech. Please try again.');
-            isSpeaking = false;
-            const speakButton = document.getElementById('speakButton');
-            speakButton.innerHTML = '<span>🔊</span> Speak Response';
-        }
-    }
-
-    // Copy chat functionality
-    async function copyChat() {
-        const chatContainer = document.getElementById('chatContainer');
-        let chatText = '';
-        
-        // Get all messages
-        const messages = chatContainer.getElementsByClassName('message');
-        Array.from(messages).forEach(message => {
-            const role = message.classList.contains('user-message') ? 'You' : 'Tutor';
-            const content = message.textContent.trim();
-            chatText += `${role}: ${content}\n\n`;
-        });
-        
-        try {
-            // Use the newer clipboard API with fallback
-            if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(chatText);
-                showCopySuccess();
-            } else {
-                fallbackCopyToClipboard(chatText);
-            }
-        } catch (error) {
-            console.error('Copy failed:', error);
-            fallbackCopyToClipboard(chatText);
-        }
-    }
-
-    // Show copy success message
-    function showCopySuccess() {
-        const copyButton = document.getElementById('copyButton');
-        const originalText = copyButton.innerHTML;
-        copyButton.innerHTML = '<span>✓</span> Copied!';
-        
-        // Show toast notification
-        const toast = document.createElement('div');
-        toast.className = 'copy-toast';
-        toast.textContent = 'Chat copied to clipboard!';
-        document.body.appendChild(toast);
-        
-        // Remove toast after animation
-        setTimeout(() => {
-            document.body.removeChild(toast);
-            copyButton.innerHTML = originalText;
-        }, 2000);
-    }
-
-    // Add toast notification styles
-    const toastStyle = document.createElement('style');
-    toastStyle.textContent = `
-        .copy-toast {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #4CAF50;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 14px;
-            z-index: 1000;
-            animation: toast-fade 2s ease;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        
-        @keyframes toast-fade {
-            0% { opacity: 0; transform: translate(-50%, 20px); }
-            10% { opacity: 1; transform: translate(-50%, 0); }
-            90% { opacity: 1; transform: translate(-50%, 0); }
-            100% { opacity: 0; transform: translate(-50%, -20px); }
-        }
-    `;
-    document.head.appendChild(toastStyle);
-
-    // Event listeners for buttons
-    document.addEventListener('DOMContentLoaded', () => {
-        // ... existing DOMContentLoaded code ...
-
-        // Add speak button handler
-        const speakButton = document.getElementById('speakButton');
-        if (speakButton) {
-            speakButton.addEventListener('click', () => {
-                const messages = document.getElementsByClassName('ai-message');
-                if (messages.length > 0) {
-                    const lastMessage = messages[messages.length - 1];
-                    speakText(lastMessage.textContent);
-                }
-            });
-        }
-
-        // Add copy button handler
-        const copyButton = document.getElementById('copyButton');
-        if (copyButton) {
-            copyButton.addEventListener('click', copyChat);
-        }
-    });
-
-    // Available free models
-    const FREE_MODELS = [
-        "google/learnlm-1.5-pro-experimental:free",
-        "meta-llama/llama-3.1-405b-instruct:free",
-        "liquid/lfm-40b:free",
-        "google/gemini-exp-1114",
-        "meta-llama/llama-3.1-70b-instruct:free",
-        "google/gemma-2-9b-it:free",
-        "qwen/qwen-2-7b-instruct:free"
-    ];
-
-    const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
-
-    let currentModelIndex = 0;
-
-    // Function to get next model when one fails
-    function getNextModel() {
-        currentModelIndex = (currentModelIndex + 1) % FREE_MODELS.length;
-        return FREE_MODELS[currentModelIndex];
-    }
-
-    // Add image upload UI
-    function addImageUploadUI() {
-        const inputSection = document.querySelector('.input-section');
-        const uploadContainer = document.createElement('div');
-        uploadContainer.className = 'upload-container';
-        uploadContainer.innerHTML = `
-            <div class="image-upload">
-                <label for="imageUpload" class="upload-label">
-                    <span>📷</span> Add Image
-                </label>
-                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
-            </div>
-            <div id="imagePreview" class="image-preview"></div>
-        `;
-        
-        inputSection.insertBefore(uploadContainer, inputSection.firstChild);
-        
-        // Add image upload styles
-        const style = document.createElement('style');
-        style.textContent = `
-            .upload-container {
-                margin-bottom: 1rem;
-                display: flex;
-                flex-direction: column;
-                gap: 0.5rem;
-            }
-            
-            .image-upload {
-                display: flex;
-                align-items: center;
-            }
-            
-            .upload-label {
-                display: inline-flex;
-                align-items: center;
-                gap: 0.5rem;
-                padding: 0.5rem 1rem;
-                background-color: #f3f4f6;
-                border: 1px solid #d1d5db;
-                border-radius: 0.5rem;
-                cursor: pointer;
-                transition: background-color 0.2s;
-            }
-            
-            .upload-label:hover {
-                background-color: #e5e7eb;
-            }
-            
-            .image-preview {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.5rem;
-            }
-            
-            .preview-item {
-                position: relative;
-                width: 100px;
-                height: 100px;
-                border-radius: 0.5rem;
-                overflow: hidden;
-            }
-            
-            .preview-item img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-            
-            .remove-image {
-                position: absolute;
-                top: 0.25rem;
-                right: 0.25rem;
-                background: rgba(0, 0, 0, 0.5);
-                color: white;
-                border: none;
-                border-radius: 50%;
-                width: 24px;
-                height: 24px;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .remove-image:hover {
-                background: rgba(0, 0, 0, 0.7);
-            }
-        `;
-        document.head.appendChild(style);
-    }
-
-    // Handle image upload and preview
-    function handleImageUpload(file) {
-        const preview = document.getElementById('imagePreview');
-        const reader = new FileReader();
-        
-        reader.onload = function(e) {
-            const div = document.createElement('div');
-            div.className = 'preview-item';
-            div.innerHTML = `
-                <img src="${e.target.result}" alt="Uploaded image">
-                <button class="remove-image" onclick="this.parentElement.remove()">×</button>
-            `;
-            preview.appendChild(div);
-        };
-        
-        reader.readAsDataURL(file);
-    }
-
-    // Convert image to base64
-    async function imageToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
         });
     }
-
-    // Modified sendMessage function to handle images
-    async function sendMessage() {
-        if (isProcessing) return;
-        
-        const messageInput = document.getElementById('messageInput');
-        const message = messageInput.value.trim();
-        const imagePreview = document.getElementById('imagePreview');
-        const images = Array.from(imagePreview.querySelectorAll('img'));
-        
-        if (!message && images.length === 0) return;
-        
-        isProcessing = true;
-        showLoading();
-        
-        try {
-            // Add user message to chat
-            addMessage(message, 'user');
-            messageInput.value = '';
-            
-            // Prepare images if any
-            const imageBase64Array = await Promise.all(
-                images.map(async img => {
-                    const response = await fetch(img.src);
-                    const blob = await response.blob();
-                    return await imageToBase64(blob);
-                })
-            );
-            
-            // Clear image preview
-            imagePreview.innerHTML = '';
-            
-            let currentModel = FREE_MODELS[currentModelIndex];
-            let success = false;
-            let attempts = 0;
-            
-            while (!success && attempts < FREE_MODELS.length) {
-                try {
-                    const response = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message,
-                            images: imageBase64Array,
-                            subject: window.TUTOR_CONFIG.subject,
-                            prompt: window.TUTOR_CONFIG.prompt,
-                            mode: window.TUTOR_CONFIG.mode,
-                            model: imageBase64Array.length > 0 ? VISION_MODEL : currentModel
-                        })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    
-                    const data = await response.json();
-                    addMessage(data.response, 'ai');
-                    success = true;
-                    
-                } catch (error) {
-                    console.error(`Error with model ${currentModel}:`, error);
-                    currentModel = getNextModel();
-                    attempts++;
-                    
-                    if (attempts === FREE_MODELS.length) {
-                        throw new Error('All models failed');
-                    }
-                }
-            }
-            
-        } catch (error) {
-            console.error('Chat error:', error);
-            showError('Failed to get response. Please try again.');
-        } finally {
-            isProcessing = false;
-            hideLoading();
-        }
-    }
-
-    // Initialize image upload when page loads
-    document.addEventListener('DOMContentLoaded', () => {
-        // ... existing DOMContentLoaded code ...
-        
-        // Add image upload UI
-        addImageUploadUI();
-        
-        // Add image upload handler
-        const imageUpload = document.getElementById('imageUpload');
-        if (imageUpload) {
-            imageUpload.addEventListener('change', (e) => {
-                if (e.target.files && e.target.files[0]) {
-                    handleImageUpload(e.target.files[0]);
-                    e.target.value = ''; // Reset input
-                }
-            });
-        }
-    });
 }); 
