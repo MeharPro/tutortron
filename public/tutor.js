@@ -160,24 +160,102 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // Message handling functions
-    async function handleSendMessage() {
-        if (isProcessing || !messageInput.value.trim()) return;
+    // Add image upload button to button group
+    const buttonGroup = document.querySelector('.button-group');
+    const imageButton = document.createElement('button');
+    imageButton.id = 'imageButton';
+    imageButton.innerHTML = '<span>🖼️</span> Add Image';
+    buttonGroup.appendChild(imageButton);
+
+    // Add file input for image upload
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+
+    // Add image upload functionality
+    imageButton.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', async (e) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+                showError('Image size must be less than 5MB');
+                return;
+            }
+
+            try {
+                // Show loading state
+                imageButton.disabled = true;
+                imageButton.innerHTML = '<span>🔄</span> Uploading...';
+
+                // Convert image to base64
+                const base64Image = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.readAsDataURL(file);
+                });
+
+                // Add image message to chat
+                appendMessage('user', `[Uploaded Image]\n${base64Image}`);
+
+                // Add to conversation history
+                conversationHistory.push({
+                    role: "user",
+                    content: [
+                        {
+                            type: "text",
+                            text: "I've uploaded an image. Please analyze it."
+                        },
+                        {
+                            type: "image_url",
+                            image_url: base64Image
+                        }
+                    ]
+                });
+
+                // Get AI response
+                await handleSendMessage(true);
+            } catch (error) {
+                console.error('Error uploading image:', error);
+                showError('Failed to upload image. Please try again.');
+            } finally {
+                // Reset button state
+                imageButton.disabled = false;
+                imageButton.innerHTML = '<span>🖼️</span> Add Image';
+                // Reset file input
+                fileInput.value = '';
+            }
+        }
+    });
+
+    // Update handleSendMessage to handle image messages
+    async function handleSendMessage(isImageMessage = false) {
+        if (isProcessing || (!isImageMessage && !messageInput.value.trim())) return;
         
-        const userMessage = messageInput.value.trim();
-        messageInput.value = '';
+        const userMessage = isImageMessage ? '' : messageInput.value.trim();
+        if (!isImageMessage) {
+            messageInput.value = '';
+        }
         
-        appendMessage('user', userMessage);
+        if (!isImageMessage) {
+            appendMessage('user', userMessage);
+        }
         
         isProcessing = true;
         if (loadingDiv) loadingDiv.style.display = 'block';
         
         try {
-            // Add user message to history
-            conversationHistory.push({
-                role: "user",
-                content: userMessage
-            });
+            if (!isImageMessage) {
+                // Add user message to history
+                conversationHistory.push({
+                    role: "user",
+                    content: userMessage
+                });
+            }
             
             // Get AI response
             const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -197,30 +275,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
             
             if (!response.ok) {
-                throw new Error(`API response not ok: ${response.status} ${response.statusText}`);
+                throw new Error('Failed to get AI response');
             }
             
             const data = await response.json();
-            console.log('API Response:', data); // Debug log
-
-            // Handle different response formats
-            let aiMessage;
-            if (data.choices && data.choices[0]) {
-                if (data.choices[0].message && data.choices[0].message.content) {
-                    aiMessage = data.choices[0].message.content;
-                } else if (data.choices[0].text) {
-                    aiMessage = data.choices[0].text;
-                } else if (data.choices[0].content) {
-                    aiMessage = data.choices[0].content;
-                } else {
-                    console.error('Unexpected response format:', data);
-                    throw new Error('Unexpected response format from AI');
-                }
-            } else {
-                console.error('No choices in response:', data);
-                throw new Error('No response content from AI');
-            }
-
+            const aiMessage = data.choices[0].message.content;
+            
             // Add AI's response to history
             conversationHistory.push({
                 role: "assistant",
@@ -424,4 +484,35 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     `;
     document.head.appendChild(style);
+
+    // Add styles for image button
+    const imageButtonStyle = document.createElement('style');
+    imageButtonStyle.textContent = `
+        #imageButton {
+            background-color: #4a9d57;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        #imageButton:hover {
+            background-color: #3c8746;
+        }
+
+        #imageButton:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        #imageButton span {
+            font-size: 16px;
+        }
+    `;
+    document.head.appendChild(imageButtonStyle);
 }); 
