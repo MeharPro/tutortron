@@ -274,85 +274,70 @@ router.get('/api/links', async (request, env) => {
 // Create a new link
 router.post('/api/links', async (request, env) => {
     try {
-        const user = await authenticate(request, env);
+        const token = request.headers.get('Authorization')?.split(' ')[1];
+        if (!token) {
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Get user from token
+        const user = await env.TEACHERS.get(token, { type: 'json' });
         if (!user) {
             return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                 status: 401,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
-                }
+                headers: { 'Content-Type': 'application/json' }
             });
         }
 
-        const { mode, subject, prompt } = await request.json();
+        // Get link data from request
+        const { subject, prompt, mode } = await request.json();
         
-        if (!mode || !subject || !prompt) {
-            return new Response(JSON.stringify({ 
-                error: 'Missing required fields' 
-            }), {
+        if (!subject || !prompt || !mode) {
+            return new Response(JSON.stringify({ error: 'Missing required fields' }), {
                 status: 400,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
-                }
+                headers: { 'Content-Type': 'application/json' }
             });
         }
 
+        // Create new link
         const id = crypto.randomUUID();
-        const created = new Date().toISOString();
-        
-        // Store in D1
-        await env.DB.prepare(`
-            INSERT INTO links (id, mode, subject, prompt, created_at, user_email)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `).bind(
-            id,
-            mode,
-            subject,
-            prompt,
-            created,
-            user.email
-        ).run();
-
         const link = {
             id,
-            mode,
             subject,
             prompt,
-            created,
+            mode,
+            created_at: new Date().toISOString(),
             user_email: user.email
         };
 
-        // Also store in KV for backward compatibility
-        if (!user.links) {
-            user.links = [];
-        }
-        user.links.unshift(link);
-        await env.TEACHERS.put(user.email, JSON.stringify(user));
-        await env.TEACHERS.put(`link:${id}`, JSON.stringify(link));
+        // Store in D1
+        await env.DB.prepare(`
+            INSERT INTO links (id, subject, prompt, mode, created_at, user_email)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(
+            link.id,
+            link.subject,
+            link.prompt,
+            link.mode,
+            link.created_at,
+            link.user_email
+        ).run();
 
-        return new Response(JSON.stringify({ 
-            success: true,
-            link
-        }), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+        // Update user's links in KV
+        if (!user.links) user.links = [];
+        user.links.push(link);
+        await env.TEACHERS.put(token, JSON.stringify(user));
+
+        return new Response(JSON.stringify(link), {
+            headers: { 'Content-Type': 'application/json' }
         });
     } catch (error) {
         console.error('Error creating link:', error);
-        return new Response(JSON.stringify({ 
-            error: 'Failed to create link',
-            message: error.message,
-            stack: error.stack
-        }), {
+        return new Response(JSON.stringify({ error: 'Failed to create link' }), {
             status: 500,
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
     }
 });
