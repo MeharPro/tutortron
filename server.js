@@ -334,7 +334,60 @@ router.get('/api/links/:id', async (request, env) => {
         console.error('Error fetching link:', error);
         return new Response(JSON.stringify({ 
             error: 'Failed to fetch link',
-            message: error.message
+            message: error.message,
+            stack: error.stack
+        }), {
+            status: 500,
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    }
+});
+
+// Delete a link
+router.delete('/api/links/:id', async (request, env) => {
+    try {
+        const user = await authenticate(request, env);
+        if (!user) {
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                status: 401,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...corsHeaders
+                }
+            });
+        }
+
+        const url = new URL(request.url);
+        const id = url.pathname.split('/').pop();
+
+        // Remove link from user's links array
+        if (user.links) {
+            const linkIndex = user.links.findIndex(l => l.id === id);
+            if (linkIndex !== -1) {
+                user.links.splice(linkIndex, 1);
+                // Update user in KV
+                await env.TEACHERS.put(user.email, JSON.stringify(user));
+            }
+        }
+
+        // Remove individual link from KV
+        await env.TEACHERS.delete(`link:${id}`);
+
+        return new Response(JSON.stringify({ success: true }), {
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    } catch (error) {
+        console.error('Error deleting link:', error);
+        return new Response(JSON.stringify({ 
+            error: 'Failed to delete link',
+            message: error.message,
+            stack: error.stack
         }), {
             status: 500,
             headers: { 
