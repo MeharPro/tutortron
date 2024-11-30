@@ -191,10 +191,30 @@ router.get('/api/links', async (request, env) => {
             });
         }
 
-        // Get links from user object
-        const links = user.links || [];
+        // Get links from D1
+        const { results: d1Links } = await env.DB.prepare(`
+            SELECT * FROM links WHERE user_email = ? ORDER BY created_at DESC
+        `).bind(user.email).all();
 
-        return new Response(JSON.stringify(links), {
+        // Get links from KV
+        const kvLinks = user.links || [];
+
+        // Combine and deduplicate links
+        const allLinks = [...d1Links];
+        for (const kvLink of kvLinks) {
+            if (!allLinks.some(link => link.id === kvLink.id)) {
+                allLinks.push(kvLink);
+            }
+        }
+
+        // Sort by created date
+        allLinks.sort((a, b) => {
+            const dateA = new Date(a.created_at || a.created);
+            const dateB = new Date(b.created_at || b.created);
+            return dateB - dateA;
+        });
+
+        return new Response(JSON.stringify(allLinks), {
             headers: { 
                 'Content-Type': 'application/json',
                 ...corsHeaders
@@ -249,19 +269,29 @@ router.post('/api/links', async (request, env) => {
             mode,
             subject,
             prompt,
-            created: new Date().toISOString()
+            created: new Date().toISOString(),
+            user_email: user.email
         };
 
-        // Add link to user's links array
+        // Store in D1
+        await env.DB.prepare(`
+            INSERT INTO links (id, mode, subject, prompt, created_at, user_email)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(
+            link.id,
+            link.mode,
+            link.subject,
+            link.prompt,
+            link.created,
+            link.user_email
+        ).run();
+
+        // Also store in KV for backward compatibility
         if (!user.links) {
             user.links = [];
         }
         user.links.unshift(link);
-
-        // Update user in KV
         await env.TEACHERS.put(user.email, JSON.stringify(user));
-
-        // Store individual link for quick access
         await env.TEACHERS.put(`link:${id}`, JSON.stringify(link));
 
         return new Response(JSON.stringify({ 
@@ -294,11 +324,26 @@ router.get('/api/links/:id', async (request, env) => {
         const url = new URL(request.url);
         const id = url.pathname.split('/').pop();
         
-        // First try to get link from KV
+        // First try to get from D1
+        const { results } = await env.DB.prepare(`
+            SELECT * FROM links WHERE id = ?
+        `).bind(id).all();
+
+        if (results && results.length > 0) {
+            const link = results[0];
+            return new Response(JSON.stringify(link), {
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...corsHeaders
+                }
+            });
+        }
+
+        // If not in D1, try KV
         let link = await env.TEACHERS.get(`link:${id}`, { type: 'json' });
 
         if (!link) {
-            // If not found, try to find in user's links
+            // If not found in KV directly, try user's links
             const users = await env.TEACHERS.list({ prefix: '' });
             for (const key of users.keys) {
                 if (key.name === 'api_keys') continue;
@@ -334,8 +379,7 @@ router.get('/api/links/:id', async (request, env) => {
         console.error('Error fetching link:', error);
         return new Response(JSON.stringify({ 
             error: 'Failed to fetch link',
-            message: error.message,
-            stack: error.stack
+            message: error.message
         }), {
             status: 500,
             headers: { 
