@@ -67,6 +67,73 @@ document.addEventListener("DOMContentLoaded", async () => {
     let currentAudio = null;
     let currentModelIndex = 0;
 
+    // Utility functions
+    function showError(message) {
+        const errorDiv = document.getElementById('errorContainer');
+        if (errorDiv) {
+            const errorMessage = errorDiv.querySelector('.error-message');
+            if (errorMessage) {
+                errorMessage.textContent = message;
+                errorDiv.style.display = 'block';
+                setTimeout(() => {
+                    errorDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+    }
+
+    function appendMessage(type, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}-message`;
+        
+        // Format content with MathJax and code highlighting
+        const formattedContent = formatContent(content);
+        messageDiv.innerHTML = formattedContent;
+        
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        
+        // Render MathJax if ready
+        if (mathJaxReady && window.MathJax) {
+            window.MathJax.typesetPromise([messageDiv]);
+        }
+        
+        // Apply code highlighting
+        messageDiv.querySelectorAll('pre code').forEach((block) => {
+            if (window.hljs) {
+                window.hljs.highlightElement(block);
+            }
+        });
+    }
+
+    function formatContent(content) {
+        // Handle code blocks
+        content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+            const language = lang || '';
+            return `<pre><code class="language-${language}">${code.trim()}</code></pre>`;
+        });
+
+        // Handle inline code
+        content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // Handle math expressions
+        content = content
+            .replace(/\$\$([\s\S]*?)\$\$/g, '<div class="math">$$$1$$</div>')
+            .replace(/\$(.*?)\$/g, '<span class="math">$1</span>');
+
+        // Handle markdown
+        content = content
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+            .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+            .replace(/^\* (.*$)/gm, '<li>$1</li>')
+            .replace(/\n\n/g, '<br><br>');
+
+        return content;
+    }
+
     // Get API keys
     let apiKeys;
     try {
@@ -262,4 +329,58 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         });
     }
+
+    // Add styles for messages
+    const messageStyles = document.createElement('style');
+    messageStyles.textContent = `
+        .message {
+            margin: 1rem 0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            background-color: #f3f4f6;
+            margin-left: auto;
+        }
+
+        .ai-message {
+            background-color: #e5e7eb;
+            margin-right: auto;
+        }
+
+        .message pre {
+            background: #1e1e1e;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+        }
+
+        .message code {
+            font-family: 'Fira Code', monospace;
+            background: rgba(0,0,0,0.05);
+            padding: 0.2em 0.4em;
+            border-radius: 0.3em;
+        }
+
+        .message pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .math {
+            font-family: 'KaTeX_Math', serif;
+        }
+
+        .math-display {
+            overflow-x: auto;
+            margin: 1em 0;
+            padding: 1em;
+            background: rgba(0,0,0,0.03);
+            border-radius: 4px;
+        }
+    `;
+    document.head.appendChild(messageStyles);
 }); 
