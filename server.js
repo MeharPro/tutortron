@@ -479,15 +479,63 @@ router.get('*', async (request, env) => {
                 return new Response('File not found', { status: 404 });
             }
 
-            // Replace placeholders in tutor.html
-            let content = decodeBase64(fileResults[0].content);
-            content = content.replace('{{SUBJECT}}', link.subject)
-                           .replace('{{PROMPT}}', link.prompt)
-                           .replace('{{MODE}}', link.mode);
+            // Get API keys for initial response
+            const apiKeys = await env.TEACHERS.get('api_keys', { type: 'json' });
+            if (!apiKeys) {
+                return new Response('API keys not found', { status: 500 });
+            }
 
-            return new Response(content, {
-                headers: { 'Content-Type': fileResults[0].content_type }
-            });
+            // Get initial AI response
+            try {
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
+                        'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+                        'X-Title': 'Tutor-Tron'
+                    },
+                    body: JSON.stringify({
+                        model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-opus',
+                        messages: [
+                            {
+                                role: "system",
+                                content: `You are a tutor helping a student with ${link.subject}. ${link.prompt}`
+                            }
+                        ]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to get AI response');
+                }
+
+                const data = await response.json();
+                const aiMessage = data.choices[0].message.content;
+
+                // Replace placeholders in tutor.html
+                let content = decodeBase64(fileResults[0].content);
+                content = content.replace('{{SUBJECT}}', link.subject)
+                               .replace('{{PROMPT}}', link.prompt)
+                               .replace('{{MODE}}', link.mode)
+                               .replace('{{INITIAL_RESPONSE}}', aiMessage);
+
+                return new Response(content, {
+                    headers: { 'Content-Type': fileResults[0].content_type }
+                });
+            } catch (error) {
+                console.error('Error getting initial AI response:', error);
+                // Still serve the page but without initial response
+                let content = decodeBase64(fileResults[0].content);
+                content = content.replace('{{SUBJECT}}', link.subject)
+                               .replace('{{PROMPT}}', link.prompt)
+                               .replace('{{MODE}}', link.mode)
+                               .replace('{{INITIAL_RESPONSE}}', '');
+
+                return new Response(content, {
+                    headers: { 'Content-Type': fileResults[0].content_type }
+                });
+            }
         }
 
         // Serve other static files from D1

@@ -9,7 +9,8 @@
         window.TUTOR_CONFIG = {
             subject: "{{SUBJECT}}",
             prompt: "{{PROMPT}}",
-            mode: "{{MODE}}"
+            mode: "{{MODE}}",
+            initialResponse: "{{INITIAL_RESPONSE}}"
         };
         
         document.addEventListener('DOMContentLoaded', () => {
@@ -26,6 +27,28 @@
                 if (mode === 'codebreaker') {
                     document.documentElement.style.backgroundColor = '#1e1e1e';
                     document.documentElement.style.color = '#00ff00';
+                }
+            }
+
+            // Add initial AI response if available
+            const initialResponse = window.TUTOR_CONFIG.initialResponse;
+            if (initialResponse) {
+                const chatContainer = document.getElementById('chatContainer');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message ai-message';
+                messageDiv.innerHTML = formatMathContent(initialResponse);
+                chatContainer.appendChild(messageDiv);
+                
+                // Apply code highlighting to initial response
+                messageDiv.querySelectorAll('pre code').forEach((block) => {
+                    if (window.hljs) {
+                        window.hljs.highlightElement(block);
+                    }
+                });
+
+                // Apply MathJax to initial response
+                if (window.MathJax?.typesetPromise) {
+                    window.MathJax.typesetPromise([messageDiv]);
                 }
             }
         });
