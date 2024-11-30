@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TutorTron</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        :root {
+            --primary-color: #4F46E5;
+            --background-color: #F3F4F6;
+            --text-color: #1F2937;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .prompt-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .response-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            font-family: inherit;
+            resize: vertical;
+        }
+        
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: #4338CA;
+        }
+        
+        .feedback {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            display: none;
+        }
+        
+        .feedback.success {
+            background-color: #ECFDF5;
+            color: #065F46;
+            border: 1px solid #059669;
+            display: block;
+        }
+        
+        .feedback.error {
+            background-color: #FEF2F2;
+            color: #991B1B;
+            border: 1px solid #DC2626;
+            display: block;
+        }
+
+        pre {
+            background-color: #1F2937;
+            color: #F3F4F6;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+        }
+
+        code {
+            font-family: 'Fira Code', monospace;
+        }
+
+        .comparison-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .comparison-item {
+            background: white;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border: 2px solid #e5e7eb;
+        }
+
+        .mode-info {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: #EEF2FF;
+            border-radius: 0.5rem;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px;
+        }
+
+        .loading:after {
+            content: '';
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="mode-info" id="modeInfo"></div>
+        <div class="prompt-container">
+            <h1 id="subject"></h1>
+            <div id="prompt"></div>
+        </div>
+        
+        <div class="response-container">
+            <div id="responseArea"></div>
+            <div id="feedback" class="feedback"></div>
+        </div>
+    </div>
+
+    <script>
+        // Get mode and link ID from URL
+        const pathParts = window.location.pathname.split('/');
+        const mode = pathParts[1];
+        const linkId = pathParts[2];
+
+        // Mode descriptions
+        const modeDescriptions = {
+            investigator: "Investigator mode challenges you to deeply analyze and research a topic. Break down complex problems and support your findings with evidence.",
+            comparitor: "Comparitor mode asks you to examine two items or concepts in detail. Focus on similarities, differences, and their significance.",
+            codebreaker: "Codebreaker mode presents coding challenges. Write clean, efficient code and consider edge cases in your solution.",
+            quest: "Quest mode guides you through a learning journey. Complete objectives and document your discoveries along the way.",
+            eliminator: "Eliminator mode requires systematic analysis to narrow down options. Explain your reasoning for each elimination."
+        };
+
+        // Initialize MathJax
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']]
+            },
+            svg: {
+                fontCache: 'global'
+            }
+        };
+
+        // Function to render markdown with LaTeX
+        function renderContent(content) {
+            // Configure marked options
+            marked.setOptions({
+                highlight: function(code, lang) {
+                    return code;
+                },
+                breaks: true,
+                gfm: true
+            });
+
+            const rendered = marked.parse(content);
+            MathJax.typesetPromise([rendered]).catch((err) => console.log('MathJax error:', err));
+            return rendered;
+        }
+
+        // Create response area based on mode
+        function createResponseArea(mode) {
+            const container = document.getElementById('responseArea');
+            
+            switch(mode) {
+                case 'investigator':
+                    container.innerHTML = `
+                        <textarea id="response" placeholder="Write your investigation here. Consider:
+• What are the key points to analyze?
+• What evidence supports your findings?
+• What conclusions can you draw?"></textarea>
+                        <button onclick="submitResponse()">Submit Investigation</button>
+                    `;
+                    break;
+                    
+                case 'comparitor':
+                    container.innerHTML = `
+                        <div class="comparison-container">
+                            <div class="comparison-item">
+                                <h3>Item 1</h3>
+                                <textarea id="response1" placeholder="Analyze the first item:
+• Key characteristics
+• Strengths and weaknesses
+• Unique features"></textarea>
+                            </div>
+                            <div class="comparison-item">
+                                <h3>Item 2</h3>
+                                <textarea id="response2" placeholder="Analyze the second item:
+• Key characteristics
+• Strengths and weaknesses
+• Unique features"></textarea>
+                            </div>
+                        </div>
+                        <textarea id="comparison" placeholder="Compare and contrast the items:
+• What are the main similarities?
+• What are the key differences?
+• Which is better suited for specific situations?"></textarea>
+                        <button onclick="submitComparison()">Submit Comparison</button>
+                    `;
+                    break;
+                    
+                case 'codebreaker':
+                    container.innerHTML = `
+                        <textarea id="response" placeholder="Write your code solution here:
+• Include comments explaining your approach
+• Handle edge cases
+• Consider efficiency"></textarea>
+                        <button onclick="submitCode()">Submit Code</button>
+                    `;
+                    break;
+                    
+                case 'quest':
+                    container.innerHTML = `
+                        <textarea id="response" placeholder="Document your quest findings:
+• What objectives have you completed?
+• What challenges did you face?
+• What did you learn?"></textarea>
+                        <button onclick="submitQuest()">Submit Quest</button>
+                    `;
+                    break;
+                    
+                case 'eliminator':
+                    container.innerHTML = `
+                        <textarea id="response" placeholder="Explain your elimination process:
+• What criteria did you use?
+• Why did you eliminate each option?
+• What is your final selection and why?"></textarea>
+                        <button onclick="submitElimination()">Submit Elimination</button>
+                    `;
+                    break;
+            }
+        }
+
+        // Load link data
+        async function loadLink() {
+            try {
+                document.getElementById('modeInfo').textContent = modeDescriptions[mode] || '';
+                document.getElementById('responseArea').innerHTML = '<div class="loading"></div>';
+
+                const response = await fetch('/api/links/' + linkId);
+                if (!response.ok) throw new Error('Failed to load link');
+                
+                const link = await response.json();
+                
+                document.getElementById('subject').textContent = link.subject;
+                document.getElementById('prompt').innerHTML = renderContent(link.prompt);
+                
+                createResponseArea(mode);
+                
+            } catch (error) {
+                console.error('Error loading link:', error);
+                document.getElementById('feedback').textContent = 'Error loading content: ' + error.message;
+                document.getElementById('feedback').className = 'feedback error';
+            }
+        }
+
+        // Submit functions
+        async function submitResponse() {
+            const response = document.getElementById('response').value;
+            if (!response.trim()) {
+                showFeedback('Please enter a response', 'error');
+                return;
+            }
+            
+            try {
+                const result = await submitToAPI(response);
+                showFeedback('Response submitted successfully!', 'success');
+            } catch (error) {
+                showFeedback('Error submitting response: ' + error.message, 'error');
+            }
+        }
+
+        async function submitComparison() {
+            const response1 = document.getElementById('response1').value;
+            const response2 = document.getElementById('response2').value;
+            const comparison = document.getElementById('comparison').value;
+
+            if (!response1.trim() || !response2.trim() || !comparison.trim()) {
+                showFeedback('Please complete all comparison sections', 'error');
+                return;
+            }
+
+            try {
+                const result = await submitToAPI({
+                    item1: response1,
+                    item2: response2,
+                    comparison: comparison
+                });
+                showFeedback('Comparison submitted successfully!', 'success');
+            } catch (error) {
+                showFeedback('Error submitting comparison: ' + error.message, 'error');
+            }
+        }
+
+        async function submitCode() {
+            const code = document.getElementById('response').value;
+            if (!code.trim()) {
+                showFeedback('Please enter your code solution', 'error');
+                return;
+            }
+
+            try {
+                const result = await submitToAPI(code);
+                showFeedback('Code submitted successfully!', 'success');
+            } catch (error) {
+                showFeedback('Error submitting code: ' + error.message, 'error');
+            }
+        }
+
+        async function submitQuest() {
+            const response = document.getElementById('response').value;
+            if (!response.trim()) {
+                showFeedback('Please document your quest findings', 'error');
+                return;
+            }
+
+            try {
+                const result = await submitToAPI(response);
+                showFeedback('Quest findings submitted successfully!', 'success');
+            } catch (error) {
+                showFeedback('Error submitting quest findings: ' + error.message, 'error');
+            }
+        }
+
+        async function submitElimination() {
+            const response = document.getElementById('response').value;
+            if (!response.trim()) {
+                showFeedback('Please explain your elimination process', 'error');
+                return;
+            }
+
+            try {
+                const result = await submitToAPI(response);
+                showFeedback('Elimination submitted successfully!', 'success');
+            } catch (error) {
+                showFeedback('Error submitting elimination: ' + error.message, 'error');
+            }
+        }
+
+        async function submitToAPI(data) {
+            try {
+                const response = await fetch('/api/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        mode,
+                        linkId,
+                        response: data
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to submit response');
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('API submission error:', error);
+                throw error;
+            }
+        }
+
+        function showFeedback(message, type) {
+            const feedback = document.getElementById('feedback');
+            feedback.textContent = message;
+            feedback.className = 'feedback ' + type;
+        }
+
+        // Initialize page
+        loadLink();
+    </script>
+</body>
+</html> 

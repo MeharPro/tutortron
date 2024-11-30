@@ -17,7 +17,9 @@ const publicFiles = [
     'tutor.css',
     'codebreaker.css',
     'index.css',
-    'style.css'
+    'style.css',
+    'accounts.txt',
+    'links.txt'
 ];
 
 // List of files to upload from root directory
@@ -48,30 +50,22 @@ async function uploadFile(filePath, isRoot = false) {
     });
 }
 
-// Process public files
-publicFiles.forEach(file => {
-    const hash = calculateHash(file);
-    if (hash) {
-        const oldHash = process.env[`HASH_${file.replace(/\./g, '_')}`];
-        if (hash !== oldHash) {
-            uploadFile(file);
-            process.env[`HASH_${file.replace(/\./g, '_')}`] = hash;
-        } else {
-            console.log(`Skipping unchanged file: ${file}`);
+// Function to ensure data files exist
+function ensureDataFiles() {
+    const files = ['accounts.txt', 'links.txt'];
+    files.forEach(file => {
+        const path = `public/${file}`;
+        if (!fs.existsSync(path)) {
+            fs.writeFileSync(path, '{}', 'utf8');
+            console.log(`Created empty ${file}`);
         }
-    }
-});
+    });
+}
 
-// Process root files
-rootFiles.forEach(file => {
-    const hash = calculateHash(file, true);
-    if (hash) {
-        const oldHash = process.env[`HASH_${file.replace(/\./g, '_')}`];
-        if (hash !== oldHash) {
-            uploadFile(file, true);
-            process.env[`HASH_${file.replace(/\./g, '_')}`] = hash;
-        } else {
-            console.log(`Skipping unchanged file: ${file}`);
-        }
-    }
-}); 
+// Ensure data files exist before uploading
+ensureDataFiles();
+
+// Upload all files
+console.log('Starting file upload...');
+publicFiles.forEach(file => uploadFile(file));
+rootFiles.forEach(file => uploadFile(file, true)); 
