@@ -14,6 +14,8 @@ const MIME_TYPES = {
 const filesToUpload = [
     'index.html',
     'index.css',
+    'index.js',
+    'css.js',
     'tutor.html',
     'tutor.css',
     'tutor.js',
