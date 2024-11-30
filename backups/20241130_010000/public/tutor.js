@@ -106,30 +106,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
 
             if (!response.ok) {
-                throw new Error(`API response not ok: ${response.status} ${response.statusText}`);
+                throw new Error('Failed to get AI response');
             }
 
             const data = await response.json();
-            console.log('API Response:', data); // Debug log
-
-            // Handle different response formats
-            let aiMessage;
-            if (data.choices && data.choices[0]) {
-                if (data.choices[0].message && data.choices[0].message.content) {
-                    aiMessage = data.choices[0].message.content;
-                } else if (data.choices[0].text) {
-                    aiMessage = data.choices[0].text;
-                } else if (data.choices[0].content) {
-                    aiMessage = data.choices[0].content;
-                } else {
-                    console.error('Unexpected response format:', data);
-                    throw new Error('Unexpected response format from AI');
-                }
-            } else {
-                console.error('No choices in response:', data);
-                throw new Error('No response content from AI');
+            if (!data || !data.choices || !data.choices[0] || !data.choices[0].message) {
+                throw new Error('Invalid response format from AI');
             }
 
+            const aiMessage = data.choices[0].message.content;
+            
             // Add AI's response to conversation history
             conversationHistory.push({
                 role: "assistant",
@@ -139,9 +125,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             // Display the AI's response
             appendMessage('ai', aiMessage);
         } catch (error) {
-            console.error('Full error details:', error);
-            showError('Failed to get response from tutor. Please try again.');
-            throw error;
+            console.error('Error getting initial response:', error);
+            showError('Failed to initialize the tutor. Please try again later.');
         } finally {
             isProcessing = false;
             if (loadingDiv) loadingDiv.style.display = 'none';
@@ -183,30 +168,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
             
             if (!response.ok) {
-                throw new Error(`API response not ok: ${response.status} ${response.statusText}`);
+                throw new Error('Failed to get AI response');
             }
             
             const data = await response.json();
-            console.log('API Response:', data); // Debug log
-
-            // Handle different response formats
-            let aiMessage;
-            if (data.choices && data.choices[0]) {
-                if (data.choices[0].message && data.choices[0].message.content) {
-                    aiMessage = data.choices[0].message.content;
-                } else if (data.choices[0].text) {
-                    aiMessage = data.choices[0].text;
-                } else if (data.choices[0].content) {
-                    aiMessage = data.choices[0].content;
-                } else {
-                    console.error('Unexpected response format:', data);
-                    throw new Error('Unexpected response format from AI');
-                }
-            } else {
-                console.error('No choices in response:', data);
-                throw new Error('No response content from AI');
-            }
-
+            const aiMessage = data.choices[0].message.content;
+            
             // Add AI's response to history
             conversationHistory.push({
                 role: "assistant",
