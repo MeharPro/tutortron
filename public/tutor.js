@@ -729,4 +729,243 @@ document.addEventListener("DOMContentLoaded", async () => {
             copyButton.addEventListener('click', copyChat);
         }
     });
+
+    // Available free models
+    const FREE_MODELS = [
+        "google/learnlm-1.5-pro-experimental:free",
+        "meta-llama/llama-3.1-405b-instruct:free",
+        "liquid/lfm-40b:free",
+        "google/gemini-exp-1114",
+        "meta-llama/llama-3.1-70b-instruct:free",
+        "google/gemma-2-9b-it:free",
+        "qwen/qwen-2-7b-instruct:free"
+    ];
+
+    const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
+
+    let currentModelIndex = 0;
+
+    // Function to get next model when one fails
+    function getNextModel() {
+        currentModelIndex = (currentModelIndex + 1) % FREE_MODELS.length;
+        return FREE_MODELS[currentModelIndex];
+    }
+
+    // Add image upload UI
+    function addImageUploadUI() {
+        const inputSection = document.querySelector('.input-section');
+        const uploadContainer = document.createElement('div');
+        uploadContainer.className = 'upload-container';
+        uploadContainer.innerHTML = `
+            <div class="image-upload">
+                <label for="imageUpload" class="upload-label">
+                    <span>📷</span> Add Image
+                </label>
+                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+            </div>
+            <div id="imagePreview" class="image-preview"></div>
+        `;
+        
+        inputSection.insertBefore(uploadContainer, inputSection.firstChild);
+        
+        // Add image upload styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .upload-container {
+                margin-bottom: 1rem;
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .image-upload {
+                display: flex;
+                align-items: center;
+            }
+            
+            .upload-label {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.5rem 1rem;
+                background-color: #f3f4f6;
+                border: 1px solid #d1d5db;
+                border-radius: 0.5rem;
+                cursor: pointer;
+                transition: background-color 0.2s;
+            }
+            
+            .upload-label:hover {
+                background-color: #e5e7eb;
+            }
+            
+            .image-preview {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            
+            .preview-item {
+                position: relative;
+                width: 100px;
+                height: 100px;
+                border-radius: 0.5rem;
+                overflow: hidden;
+            }
+            
+            .preview-item img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            
+            .remove-image {
+                position: absolute;
+                top: 0.25rem;
+                right: 0.25rem;
+                background: rgba(0, 0, 0, 0.5);
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 24px;
+                height: 24px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .remove-image:hover {
+                background: rgba(0, 0, 0, 0.7);
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Handle image upload and preview
+    function handleImageUpload(file) {
+        const preview = document.getElementById('imagePreview');
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            const div = document.createElement('div');
+            div.className = 'preview-item';
+            div.innerHTML = `
+                <img src="${e.target.result}" alt="Uploaded image">
+                <button class="remove-image" onclick="this.parentElement.remove()">×</button>
+            `;
+            preview.appendChild(div);
+        };
+        
+        reader.readAsDataURL(file);
+    }
+
+    // Convert image to base64
+    async function imageToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // Modified sendMessage function to handle images
+    async function sendMessage() {
+        if (isProcessing) return;
+        
+        const messageInput = document.getElementById('messageInput');
+        const message = messageInput.value.trim();
+        const imagePreview = document.getElementById('imagePreview');
+        const images = Array.from(imagePreview.querySelectorAll('img'));
+        
+        if (!message && images.length === 0) return;
+        
+        isProcessing = true;
+        showLoading();
+        
+        try {
+            // Add user message to chat
+            addMessage(message, 'user');
+            messageInput.value = '';
+            
+            // Prepare images if any
+            const imageBase64Array = await Promise.all(
+                images.map(async img => {
+                    const response = await fetch(img.src);
+                    const blob = await response.blob();
+                    return await imageToBase64(blob);
+                })
+            );
+            
+            // Clear image preview
+            imagePreview.innerHTML = '';
+            
+            let currentModel = FREE_MODELS[currentModelIndex];
+            let success = false;
+            let attempts = 0;
+            
+            while (!success && attempts < FREE_MODELS.length) {
+                try {
+                    const response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message,
+                            images: imageBase64Array,
+                            subject: window.TUTOR_CONFIG.subject,
+                            prompt: window.TUTOR_CONFIG.prompt,
+                            mode: window.TUTOR_CONFIG.mode,
+                            model: imageBase64Array.length > 0 ? VISION_MODEL : currentModel
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    addMessage(data.response, 'ai');
+                    success = true;
+                    
+                } catch (error) {
+                    console.error(`Error with model ${currentModel}:`, error);
+                    currentModel = getNextModel();
+                    attempts++;
+                    
+                    if (attempts === FREE_MODELS.length) {
+                        throw new Error('All models failed');
+                    }
+                }
+            }
+            
+        } catch (error) {
+            console.error('Chat error:', error);
+            showError('Failed to get response. Please try again.');
+        } finally {
+            isProcessing = false;
+            hideLoading();
+        }
+    }
+
+    // Initialize image upload when page loads
+    document.addEventListener('DOMContentLoaded', () => {
+        // ... existing DOMContentLoaded code ...
+        
+        // Add image upload UI
+        addImageUploadUI();
+        
+        // Add image upload handler
+        const imageUpload = document.getElementById('imageUpload');
+        if (imageUpload) {
+            imageUpload.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    handleImageUpload(e.target.files[0]);
+                    e.target.value = ''; // Reset input
+                }
+            });
+        }
+    });
 }); 
