@@ -222,7 +222,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             };
             conversationHistory.push(systemMessage);
 
-            // Get initial response from AI
+            // Initial API call
             const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -232,7 +232,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     'X-Title': 'Tutor-Tron'
                 },
                 body: JSON.stringify({
-                    model: imageBase64 ? VISION_MODEL : FREE_MODELS[currentModelIndex],
+                    model: FREE_MODELS[currentModelIndex], // Always use first model for initial message
                     messages: conversationHistory,
                     temperature: 0.7,
                     max_tokens: 400
