@@ -693,3 +693,77 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// Function to add a link card to the list
+function addLinkCard(link) {
+    const linkCard = document.createElement('div');
+    linkCard.className = `link-card ${link.mode.toLowerCase()}`;
+    linkCard.innerHTML = `
+        <h3>
+            ${link.subject}
+            <span class="mode-indicator ${link.mode.toLowerCase()}">${link.mode}</span>
+        </h3>
+        <div class="link-url">${window.location.origin}/${link.mode.toLowerCase()}/${link.id}</div>
+        <div class="button-group">
+            <button class="copy-link-btn" onclick="copyLink('${link.id}')">Copy Link</button>
+            <button class="delete-link-btn" onclick="deleteLink('${link.id}')">Delete Link</button>
+        </div>
+    `;
+    
+    // Insert at the beginning of the list
+    const linksList = document.getElementById('linksList');
+    if (linksList.firstChild) {
+        linksList.insertBefore(linkCard, linksList.firstChild);
+    } else {
+        linksList.appendChild(linkCard);
+    }
+}
+
+// Load user's links
+async function loadLinks() {
+    try {
+        const token = localStorage.getItem('teacherToken');
+        const response = await fetch('/api/links', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load links');
+        }
+
+        const links = await response.json();
+        
+        // Sort links by creation date (newest first)
+        links.sort((a, b) => {
+            const dateA = new Date(a.created_at || a.created);
+            const dateB = new Date(b.created_at || b.created);
+            return dateB - dateA;
+        });
+
+        // Clear existing links
+        const linksList = document.getElementById('linksList');
+        linksList.innerHTML = '';
+
+        // Add links in sorted order
+        links.forEach(link => {
+            const linkCard = document.createElement('div');
+            linkCard.className = `link-card ${link.mode.toLowerCase()}`;
+            linkCard.innerHTML = `
+                <h3>
+                    ${link.subject}
+                    <span class="mode-indicator ${link.mode.toLowerCase()}">${link.mode}</span>
+                </h3>
+                <div class="link-url">${window.location.origin}/${link.mode.toLowerCase()}/${link.id}</div>
+                <div class="button-group">
+                    <button class="copy-link-btn" onclick="copyLink('${link.id}')">Copy Link</button>
+                    <button class="delete-link-btn" onclick="deleteLink('${link.id}')">Delete Link</button>
+                </div>
+            `;
+            linksList.appendChild(linkCard);
+        });
+    } catch (error) {
+        console.error('Error loading links:', error);
+    }
+}

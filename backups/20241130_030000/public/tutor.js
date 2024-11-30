@@ -106,71 +106,63 @@ document.addEventListener("DOMContentLoaded", async () => {
             };
             conversationHistory.push(systemMessage);
 
-            let currentModel = FREE_MODELS[currentModelIndex];
-            let success = false;
-            let attempts = 0;
+            // Get initial response from AI
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
+                    'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+                    'X-Title': 'Tutor-Tron'
+                },
+                body: JSON.stringify({
+                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-sonnet-vision',
+                    messages: conversationHistory,
+                    temperature: 0.7,
+                    max_tokens: 400
+                })
+            });
 
-            while (!success && attempts < FREE_MODELS.length) {
-                try {
-                    // Get initial response from AI
-                    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
-                            'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
-                            'X-Title': 'Tutor-Tron'
-                        },
-                        body: JSON.stringify({
-                            model: currentModel,
-                            messages: conversationHistory,
-                            temperature: 0.7
-                        })
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-
-                    const data = await response.json();
-                    
-                    if (data.error) {
-                        throw new Error(data.error.message || 'API Error');
-                    }
-
-                    let aiMessage;
-                    if (data.choices && data.choices[0]) {
-                        aiMessage = data.choices[0].message?.content || 
-                                  data.choices[0].text || 
-                                  data.choices[0].content;
-                                  
-                        if (!aiMessage) {
-                            throw new Error('No response content');
-                        }
-                    } else {
-                        throw new Error('Invalid response format');
-                    }
-
-                    // Add AI's response to conversation history
-                    conversationHistory.push({
-                        role: "assistant",
-                        content: aiMessage
-                    });
-
-                    // Display the AI's response
-                    appendMessage('ai', aiMessage);
-                    success = true;
-
-                } catch (error) {
-                    console.error(`Error with model ${currentModel}:`, error);
-                    currentModel = getNextModel();
-                    attempts++;
-                    
-                    if (attempts === FREE_MODELS.length) {
-                        throw new Error('All models failed');
-                    }
-                }
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('API Error Response:', errorData);
+                throw new Error(`API response not ok: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
             }
+
+            const data = await response.json();
+            console.log('API Response:', data);
+
+            // Handle different response formats
+            let aiMessage;
+            if (data.error) {
+                console.error('API returned error:', data.error);
+                throw new Error(`API Error: ${JSON.stringify(data.error)}`);
+            }
+            
+            if (data.choices && data.choices[0]) {
+                if (data.choices[0].message && data.choices[0].message.content) {
+                    aiMessage = data.choices[0].message.content;
+                } else if (data.choices[0].text) {
+                    aiMessage = data.choices[0].text;
+                } else if (data.choices[0].content) {
+                    aiMessage = data.choices[0].content;
+                } else {
+                    console.error('Unexpected response format:', data);
+                    throw new Error('Unexpected response format from AI');
+                }
+            } else {
+                console.error('No choices in response:', data);
+                throw new Error('No response content from AI');
+            }
+
+            // Add AI's response to conversation history
+            conversationHistory.push({
+                role: "assistant",
+                content: aiMessage
+            });
+
+            // Display the AI's response
+            appendMessage('ai', aiMessage);
         } catch (error) {
             console.error('Full error details:', error);
             showError(`Failed to get response from tutor: ${error.message}`);
@@ -257,57 +249,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function handleSendMessage(isImageMessage = false) {
         if (isProcessing || (!isImageMessage && !messageInput.value.trim())) return;
         
+        const userMessage = isImageMessage ? '' : messageInput.value.trim();
+        if (!isImageMessage) {
+            messageInput.value = '';
+        }
+        
+        if (!isImageMessage) {
+            appendMessage('user', userMessage);
+        }
+        
         isProcessing = true;
         if (loadingDiv) loadingDiv.style.display = 'block';
         
         try {
-            const userMessage = isImageMessage ? 
-                conversationHistory[conversationHistory.length - 1] : 
-                {
-                    role: "user",
-                    content: messageInput.value.trim()
-                };
-                
             if (!isImageMessage) {
-                appendMessage('user', userMessage.content);
-                conversationHistory.push(userMessage);
-                messageInput.value = '';
-            }
-
-            let currentModel = FREE_MODELS[currentModelIndex];
-            let success = false;
-            let attempts = 0;
-
-            while (!success && attempts < FREE_MODELS.length) {
-                try {
-                    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
-                            'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
-                            'X-Title': 'Tutor-Tron'
-                        },
-                        body: JSON.stringify({
-                            model: isImageMessage ? VISION_MODEL : currentModel,
-                            messages: conversationHistory,
-                            temperature: 0.7
-                        })
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-
-                    const data = await response.json();
-                    
-                    if (data.error) {
-                        throw new Error(data.error.message || 'API Error');
-                    }
-
-                    let aiMessage;
-                    if (data.choices && data.choices[0]) {
-                        aiMessage = data.choices[0].message?.content || 
                 // Add user message to history
                 conversationHistory.push({
                     role: "user",
