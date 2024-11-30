@@ -221,17 +221,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Function to show errors
-    function showError(message) {
-        const errorDiv = document.getElementById('errorContainer');
-        const errorMessage = errorDiv.querySelector('.error-message');
-        errorMessage.textContent = message;
-        errorDiv.style.display = 'block';
-        setTimeout(() => {
-            errorDiv.style.display = 'none';
-        }, 5000);
-    }
-
     // Function to format content with math and code highlighting
     function formatMathContent(content) {
         // Language aliases mapping
@@ -291,5 +280,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         return content;
+    }
+
+    // Function to show errors
+    function showError(message) {
+        const errorDiv = document.getElementById('errorContainer');
+        const errorMessage = errorDiv.querySelector('.error-message');
+        errorMessage.textContent = message;
+        errorDiv.style.display = 'block';
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
     }
 }); 
