@@ -525,7 +525,7 @@ router.get('*', async (request, env) => {
             } else {
                 // If not in D1, try KV
                 link = await env.TEACHERS.get(`link:${id}`, { type: 'json' });
-
+                
                 if (!link) {
                     // If not found in KV directly, try user's links
                     const users = await env.TEACHERS.list({ prefix: '' });
@@ -579,11 +579,15 @@ router.get('*', async (request, env) => {
                 return new Response('File not found', { status: 404 });
             }
 
-            // Replace placeholders in tutor.html
+            // Replace placeholders in tutor.html with properly escaped values
             let content = decodeBase64(fileResults[0].content);
-            content = content.replace('{{SUBJECT}}', link.subject)
-                           .replace('{{PROMPT}}', link.prompt)
-                           .replace('{{MODE}}', link.mode);
+            const escapedSubject = JSON.stringify(link.subject).slice(1, -1);
+            const escapedPrompt = JSON.stringify(link.prompt).slice(1, -1);
+            const escapedMode = JSON.stringify(link.mode).slice(1, -1);
+            
+            content = content.replace('{{SUBJECT}}', escapedSubject)
+                           .replace('{{PROMPT}}', escapedPrompt)
+                           .replace('{{MODE}}', escapedMode);
 
             return new Response(content, {
                 headers: { 'Content-Type': fileResults[0].content_type }
