@@ -1,88 +1,54 @@
 const fs = require('fs');
-const { exec } = require('child_process');
+const path = require('path');
+const { execSync } = require('child_process');
+const crypto = require('crypto');
 
-// List of files to upload from public directory
-const publicFiles = [
+const MIME_TYPES = {
+    '.html': 'text/html',
+    '.css': 'text/css',
+    '.js': 'application/javascript',
+    '.json': 'application/json',
+    '.txt': 'text/plain'
+};
+
+const filesToUpload = [
     'index.html',
-    'tutor.html',
-    'pros-only-teachers.html',
-    'private-access-teachers-only.html',
-    'invalid-link.html',
-    'css.js',
-    'tutor.js',
-    'teacher-dashboard.js',
-    'register.js',
-    'index.js',
-    'tutor.css',
-    'codebreaker.css',
     'index.css',
+    'tutor.html',
+    'tutor.css',
+    'tutor.js',
+    'invalid-link.html',
+    'private-access-teachers-only.html',
+    'pros-only-teachers.html',
+    'register.js',
+    'teacher-dashboard.js',
+    'codebreaker.css',
+    'code-highlighter.js',
     'style.css'
 ];
 
-// Function to get content type
-function getContentType(path) {
-    const ext = path.split('.').pop().toLowerCase();
-    const types = {
-        'html': 'text/html',
-        'css': 'text/css',
-        'js': 'application/javascript',
-        'json': 'application/json',
-        'png': 'image/png',
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'gif': 'image/gif',
-        'svg': 'image/svg+xml'
-    };
-    return types[ext] || 'text/plain';
-}
-
-// Function to encode content for SQL
-function encodeForSQL(str) {
-    return Buffer.from(str).toString('base64');
-}
-
-// Function to upload file using D1
-function uploadFile(filePath) {
-    return new Promise((resolve, reject) => {
+filesToUpload.forEach(file => {
+    const filePath = path.join('public', file);
+    if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const base64Content = Buffer.from(content).toString('base64');
+        const ext = path.extname(file);
+        const contentType = MIME_TYPES[ext] || 'text/plain';
+        const dbPath = `public/${file}`;
+        
+        // Create a hash of the file content
+        const hash = crypto.createHash('sha256').update(content).digest('hex');
+        
+        const sql = `INSERT OR REPLACE INTO files (path, content, content_type, file_hash) VALUES ('${dbPath}', '${base64Content}', '${contentType}', '${hash}');`;
+        
         try {
-            const fullPath = `public/${filePath}`;
-            const content = fs.readFileSync(fullPath, 'utf8');
-            const contentType = getContentType(filePath);
-            const encodedContent = encodeForSQL(content);
-            
-            const command = `wrangler d1 execute tutortron --command="INSERT OR REPLACE INTO files (path, content, content_type) VALUES ('${fullPath}', '${encodedContent}', '${contentType}');" --remote`;
-            
-            exec(command, (error, stdout, stderr) => {
-                if (error) {
-                    console.error(`Error uploading ${filePath}:`, error);
-                    reject(error);
-                    return;
-                }
-                console.log(`Uploaded ${filePath}`);
-                resolve();
-            });
-        } catch (error) {
-            console.error(`Error reading/uploading ${filePath}:`, error);
-            reject(error);
-        }
-    });
-}
-
-// Upload files sequentially
-async function uploadFiles() {
-    console.log('Starting file upload...');
-    for (const file of publicFiles) {
-        try {
-            await uploadFile(file);
-            // Add a small delay between uploads
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            execSync(`wrangler d1 execute tutortron --command "${sql}" --remote`, { stdio: 'inherit' });
+            console.log(`Uploaded ${file}`);
         } catch (error) {
             console.error(`Failed to upload ${file}:`, error);
         }
+    } else {
+        console.error(`File not found: ${filePath}`);
     }
-    console.log('File upload complete');
-}
-
-// Start the upload process
-uploadFiles();
+});
   
