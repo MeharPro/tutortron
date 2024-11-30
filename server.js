@@ -611,35 +611,45 @@ router.post('/api/chat', async (request, env) => {
             {
                 role: "system",
                 content: `You are a tutor helping a student with ${subject}. ${prompt}`
-            },
-            {
-                role: "user",
-                content: message
             }
         ];
 
-        // If there's an image, add it to the content
+        // Handle image messages differently for vision models
         if (image) {
-            messages[1].content = [
-                {
-                    type: "text",
-                    text: message
-                },
-                {
-                    type: "image_url",
-                    image_url: {
-                        url: `data:image/jpeg;base64,${image}`
+            messages.push({
+                role: "user",
+                content: [
+                    {
+                        type: "text",
+                        text: message || "Please help me understand this image."
+                    },
+                    {
+                        type: "image_url",
+                        image_url: {
+                            url: `data:image/jpeg;base64,${image}`
+                        }
                     }
-                }
-            ];
+                ]
+            });
+        } else {
+            messages.push({
+                role: "user",
+                content: message
+            });
         }
+
+        // Use vision model if image is present
+        const selectedModel = image ? 'anthropic/claude-3-haiku-vision' : model;
+
+        console.log('Using model:', selectedModel); // Debug log
+        console.log('Messages:', JSON.stringify(messages)); // Debug log
 
         // Make the API request
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers,
             body: JSON.stringify({
-                model,
+                model: selectedModel,
                 messages,
                 temperature: 0.7,
                 max_tokens: 1000
@@ -653,6 +663,8 @@ router.post('/api/chat', async (request, env) => {
         }
 
         const data = await response.json();
+        console.log('API Response:', data); // Debug log
+
         return new Response(JSON.stringify({
             response: data.choices[0].message.content
         }), {
