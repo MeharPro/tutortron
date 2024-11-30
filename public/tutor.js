@@ -67,6 +67,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     let currentAudio = null;
     let currentModelIndex = 0;
 
+    // Get API keys
+    let apiKeys;
+    try {
+        const keyResponse = await fetch('/api/keys');
+        apiKeys = await keyResponse.json();
+        if (!apiKeys || !apiKeys.OPENROUTER_API_KEY) {
+            throw new Error('API key not found');
+        }
+    } catch (error) {
+        console.error('Failed to fetch API keys:', error);
+        showError('Failed to initialize the tutor. Please try again later.');
+        return;
+    }
+
+    // Get configuration from window.TUTOR_CONFIG
+    const { subject, prompt, mode } = window.TUTOR_CONFIG;
+    
+    // Set mode-specific styling
+    document.body.classList.add(mode.toLowerCase());
+
     // Available free models
     const FREE_MODELS = [
         "google/learnlm-1.5-pro-experimental:free",
