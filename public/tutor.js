@@ -290,6 +290,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // Temporarily disable image upload functionality
+    /*
     // Add image upload button to button group
     const buttonGroup = document.querySelector('.button-group');
     const imageButton = document.createElement('button');
@@ -329,8 +331,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     reader.readAsDataURL(file);
                 });
 
-                // Add image message to chat
-                appendMessage('user', `[Uploaded Image]\n${base64Image}`);
+                // Add image to chat
+                appendMessage('user', base64Image);
 
                 // Add to conversation history
                 conversationHistory.push({
@@ -349,18 +351,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 // Get AI response
                 await handleSendMessage(true);
+
             } catch (error) {
-                console.error('Error uploading image:', error);
+                console.error('Image upload error:', error);
                 showError('Failed to upload image. Please try again.');
             } finally {
-                // Reset button state
                 imageButton.disabled = false;
                 imageButton.innerHTML = '<span>🖼️</span> Add Image';
-                // Reset file input
-                fileInput.value = '';
             }
         }
     });
+    */
 
     // Update handleSendMessage to handle image messages
     async function handleSendMessage() {
@@ -951,4 +952,32 @@ document.addEventListener("DOMContentLoaded", async () => {
         const loadingDiv = document.getElementById('loading');
         if (loadingDiv) loadingDiv.style.display = 'none';
     }
+
+    // Add styles for chat images
+    const imageStyles = document.createElement('style');
+    imageStyles.textContent = `
+        .chat-image {
+            max-width: 300px;
+            max-height: 300px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin: 10px 0;
+        }
+        
+        .chat-image:hover {
+            transform: scale(1.05);
+        }
+        
+        .user-message .chat-image {
+            float: right;
+            margin-left: 20px;
+        }
+        
+        .ai-message .chat-image {
+            float: left;
+            margin-right: 20px;
+        }
+    `;
+    document.head.appendChild(imageStyles);
 }); 
