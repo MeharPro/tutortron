@@ -51,7 +51,7 @@ highlightCSS.rel = 'stylesheet';
 highlightCSS.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css';
 document.head.appendChild(highlightCSS);
 
-// Define available models
+// Define available models in order of preference
 const FREE_MODELS = [
     "google/learnlm-1.5-pro-experimental:free",
     "meta-llama/llama-3.1-405b-instruct:free",
@@ -64,9 +64,107 @@ const FREE_MODELS = [
 
 const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
 
-// Get random model from the list
-function getRandomModel() {
-    return FREE_MODELS[Math.floor(Math.random() * FREE_MODELS.length)];
+// Keep track of which model we're using
+let currentModelIndex = 0;
+
+// Get next model in sequence
+function getNextModel() {
+    const model = FREE_MODELS[currentModelIndex];
+    currentModelIndex = (currentModelIndex + 1) % FREE_MODELS.length;
+    return model;
+}
+
+// Reset model index if we get a successful response
+function resetModelIndex() {
+    currentModelIndex = 0;
+}
+
+// Modify sendMessage function to use sequential models
+async function sendMessage() {
+    if (isProcessing) return;
+    
+    const messageInput = document.getElementById('messageInput');
+    const message = messageInput.value.trim();
+    const imageUpload = document.getElementById('imageUpload');
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+    
+    if (!message && (!imageUpload || !imageUpload.files[0])) return;
+    
+    isProcessing = true;
+    showLoading();
+    
+    try {
+        let imageBase64 = null;
+        if (imageUpload && imageUpload.files[0]) {
+            imageBase64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+                reader.readAsDataURL(imageUpload.files[0]);
+            });
+        }
+
+        // Try each model until one works
+        let response;
+        let data;
+        let success = false;
+
+        while (!success && currentModelIndex < FREE_MODELS.length) {
+            try {
+                const model = imageBase64 ? VISION_MODEL : FREE_MODELS[currentModelIndex];
+                
+                response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message,
+                        subject: window.TUTOR_CONFIG.subject,
+                        prompt: window.TUTOR_CONFIG.prompt,
+                        mode: window.TUTOR_CONFIG.mode,
+                        model,
+                        image: imageBase64
+                    })
+                });
+
+                if (response.ok) {
+                    data = await response.json();
+                    success = true;
+                    resetModelIndex(); // Reset to first model on success
+                } else {
+                    currentModelIndex++; // Try next model
+                }
+            } catch (error) {
+                console.error(`Error with model ${FREE_MODELS[currentModelIndex]}:`, error);
+                currentModelIndex++; // Try next model
+            }
+        }
+
+        if (!success) {
+            throw new Error('All models failed to respond');
+        }
+
+        appendMessage(message, 'user');
+        if (imageBase64) {
+            appendImageMessage(imageUpload.files[0]);
+        }
+        appendMessage(data.response, 'ai');
+        
+        // Clear input and image
+        messageInput.value = '';
+        if (imageUpload) {
+            imageUpload.value = '';
+            imagePreviewContainer.style.display = 'none';
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showError('Failed to send message. Please try again.');
+        currentModelIndex = 0; // Reset index after all models fail
+    } finally {
+        isProcessing = false;
+        hideLoading();
+    }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
