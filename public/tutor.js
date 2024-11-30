@@ -103,7 +103,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     'X-Title': 'Tutor-Tron'
                 },
                 body: JSON.stringify({
-                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-opus',
+                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-sonnet-vision',
                     messages: conversationHistory,
                     temperature: 0.7,
                     max_tokens: 400
@@ -189,7 +189,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     'X-Title': 'Tutor-Tron'
                 },
                 body: JSON.stringify({
-                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-opus',
+                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-sonnet-vision',
                     messages: conversationHistory,
                     temperature: 0.7,
                     max_tokens: 400
@@ -247,14 +247,70 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
+    // Add modal for image expansion
+    const modal = document.createElement('div');
+    modal.className = 'image-modal';
+    modal.style.display = 'none';
+    modal.onclick = () => modal.style.display = 'none';
+    document.body.appendChild(modal);
+
+    // Add modal styles
+    const modalStyle = document.createElement('style');
+    modalStyle.textContent = `
+        .image-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            z-index: 1000;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .image-modal img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+    `;
+    document.head.appendChild(modalStyle);
+
     // Function to append messages to chat
     function appendMessage(type, content) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}-message`;
         
+        // Check for image URLs in the content
+        const imageUrlMatch = content.match(/https?:\/\/[^\s<>"]+?\.(?:jpg|jpeg|gif|png|webp)(?:\?[^\s<>"]+)?/gi);
+        
+        if (imageUrlMatch) {
+            // Remove image URLs from content
+            imageUrlMatch.forEach(url => {
+                content = content.replace(url, '');
+                // Create and append image element
+                const img = document.createElement('img');
+                img.src = url;
+                img.alt = 'Generated image';
+                img.className = 'generated-image';
+                // Add click handler for image expansion
+                img.onclick = (e) => {
+                    e.stopPropagation();
+                    modal.innerHTML = `<img src="${url}" alt="Expanded image">`;
+                    modal.style.display = 'flex';
+                };
+                messageDiv.appendChild(img);
+            });
+        }
+        
         // Format content with MathJax and code highlighting
         const formattedContent = formatMathContent(content);
-        messageDiv.innerHTML = formattedContent;
+        messageDiv.innerHTML += formattedContent;
         
         chatContainer.appendChild(messageDiv);
         chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -343,4 +399,29 @@ document.addEventListener("DOMContentLoaded", async () => {
             errorDiv.style.display = 'none';
         }, 5000);
     }
+
+    // Add CSS for images
+    const style = document.createElement('style');
+    style.textContent = `
+        .generated-image {
+            max-width: 100%;
+            height: auto;
+            margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .message img {
+            display: block;
+            max-width: 100%;
+            margin: 10px auto;
+        }
+        
+        .message img:hover {
+            cursor: pointer;
+            transform: scale(1.02);
+            transition: transform 0.2s ease;
+        }
+    `;
+    document.head.appendChild(style);
 }); 
