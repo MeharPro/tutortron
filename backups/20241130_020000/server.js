@@ -413,7 +413,8 @@ router.delete('/api/links/:id', async (request, env) => {
 // Function to decode base64 content
 function decodeBase64(base64) {
     try {
-        return atob(base64);
+        const binaryString = atob(base64);
+        return new TextDecoder().decode(new Uint8Array([...binaryString].map(c => c.charCodeAt(0))));
     } catch (error) {
         console.error('Error decoding base64:', error);
         throw error;
@@ -424,74 +425,129 @@ function decodeBase64(base64) {
 router.get('*', async (request, env) => {
     try {
         const url = new URL(request.url);
-        let path = url.pathname;
+        const path = url.pathname;
 
-        // Default to index.html for root path
-        if (path === '/') {
-            path = '/index.html';
+        // Special case for invalid-link.html
+        if (path === '/invalid-link.html') {
+            const { results } = await env.DB.prepare(`
+                SELECT content, content_type FROM files WHERE path = ?
+            `).bind('public/invalid-link.html').all();
+
+            if (!results || results.length === 0) {
+                return new Response('Invalid link', { 
+                    status: 404,
+                    headers: { 'Content-Type': 'text/plain' }
+                });
+            }
+
+            const content = decodeBase64(results[0].content);
+            return new Response(content, {
+                headers: { 'Content-Type': results[0].content_type }
+            });
         }
 
-        // Remove leading slash and 'public' from path if present
-        const normalizedPath = path.replace(/^\//, '').replace(/^public\//, '');
-
         // Handle mode-specific routes
-        const modeMatch = normalizedPath.match(/^(investigator|comparitor|codebreaker|quest|eliminator)\/([^\/]+)$/);
+        const modeMatch = path.match(/^\/(investigator|comparitor|codebreaker|quest|eliminator)\/([^\/]+)$/);
         if (modeMatch) {
             const [, mode, id] = modeMatch;
             
-            // Get link from D1
-            const { results: linkResults } = await env.DB.prepare(`
+            // First try to get from D1
+            const { results } = await env.DB.prepare(`
                 SELECT * FROM links WHERE id = ?
             `).bind(id).all();
 
-            let link = linkResults?.[0];
-            if (!link) {
+            let link;
+            if (results && results.length > 0) {
+                link = results[0];
+            } else {
                 // If not in D1, try KV
                 link = await env.TEACHERS.get(`link:${id}`, { type: 'json' });
+                
+                if (!link) {
+                    // If not found in KV directly, try user's links
+                    const users = await env.TEACHERS.list({ prefix: '' });
+                    for (const key of users.keys) {
+                        if (key.name === 'api_keys') continue;
+                        const user = await env.TEACHERS.get(key.name, { type: 'json' });
+                        if (user && user.links) {
+                            const foundLink = user.links.find(l => l.id === id);
+                            if (foundLink) {
+                                link = foundLink;
+                                // Store in D1 for future access
+                                try {
+                                    await env.DB.prepare(`
+                                        INSERT INTO links (id, mode, subject, prompt, created_at, user_email)
+                                        VALUES (?, ?, ?, ?, ?, ?)
+                                    `).bind(
+                                        foundLink.id,
+                                        foundLink.mode,
+                                        foundLink.subject,
+                                        foundLink.prompt,
+                                        foundLink.created || foundLink.created_at,
+                                        user.email
+                                    ).run();
+                                } catch (error) {
+                                    console.error('Error migrating link to D1:', error);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
             }
 
-            if (!link || link.mode.toLowerCase() !== mode.toLowerCase()) {
+            if (!link) {
+                // Redirect to invalid-link.html
+                return Response.redirect(`${url.origin}/invalid-link.html`, 302);
+            }
+
+            // Verify mode matches
+            if (link.mode.toLowerCase() !== mode.toLowerCase()) {
+                console.error(`Mode mismatch: URL has ${mode}, link has ${link.mode}`);
                 return Response.redirect(`${url.origin}/invalid-link.html`, 302);
             }
 
             // Get tutor.html from D1
             const { results: fileResults } = await env.DB.prepare(`
                 SELECT content, content_type FROM files WHERE path = ?
-            `).bind('tutor.html').all();
+            `).bind('public/tutor.html').all();
 
-            if (!fileResults?.length) {
-                return new Response('Tutor page not found', { status: 404 });
+            if (!fileResults || fileResults.length === 0) {
+                return new Response('File not found', { status: 404 });
             }
 
-            // Replace placeholders in tutor.html
+            // Replace placeholders in tutor.html with properly escaped values
             let content = decodeBase64(fileResults[0].content);
-            content = content.replace('{{SUBJECT}}', link.subject)
-                           .replace('{{PROMPT}}', link.prompt)
-                           .replace('{{MODE}}', link.mode);
+            const escapedSubject = JSON.stringify(link.subject).slice(1, -1);
+            const escapedPrompt = JSON.stringify(link.prompt).slice(1, -1);
+            const escapedMode = JSON.stringify(link.mode).slice(1, -1);
+            
+            content = content.replace('{{SUBJECT}}', escapedSubject)
+                           .replace('{{PROMPT}}', escapedPrompt)
+                           .replace('{{MODE}}', escapedMode);
 
             return new Response(content, {
                 headers: { 'Content-Type': fileResults[0].content_type }
             });
         }
 
-        // Get file from D1
+        // Serve other static files from D1
+        const filePath = path === '/' ? '/index.html' : path;
         const { results } = await env.DB.prepare(`
             SELECT content, content_type FROM files WHERE path = ?
-        `).bind(normalizedPath).all();
+        `).bind(`public${filePath}`).all();
 
-        if (!results?.length) {
-            console.error(`File not found: ${normalizedPath}`);
+        if (!results || results.length === 0) {
+            console.error(`File not found: public${filePath}`);
             return new Response('Not found', { status: 404 });
         }
 
-        const { content, content_type } = results[0];
-        const decodedContent = decodeBase64(content);
-
-        return new Response(decodedContent, {
-            headers: { 'Content-Type': content_type }
+        const content = decodeBase64(results[0].content);
+        return new Response(content, {
+            headers: { 'Content-Type': results[0].content_type }
         });
     } catch (error) {
-        console.error('Error serving file:', error, error.stack);
+        console.error('Error serving file:', error);
         return new Response(`Internal Server Error: ${error.message}`, { 
             status: 500,
             headers: { 'Content-Type': 'text/plain' }

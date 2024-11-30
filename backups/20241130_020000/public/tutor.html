@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="pageTitle">Tutor-Tron AI</title>
+    <!-- Immediate mode detection and theme application -->
+    <script>
+        window.TUTOR_CONFIG = {
+            subject: "{{SUBJECT}}",
+            prompt: "{{PROMPT}}",
+            mode: "{{MODE}}"
+        };
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            // Update title and subject
+            const subject = window.TUTOR_CONFIG.subject;
+            document.getElementById('pageTitle').textContent = `Tutor-Tron AI - ${subject}`;
+            document.getElementById('subjectTitle').textContent = subject;
+            
+            // Set mode
+            const mode = window.TUTOR_CONFIG.mode.toLowerCase();
+            if (mode) {
+                document.documentElement.className = mode;
+                // Immediately set dark theme for codebreaker
+                if (mode === 'codebreaker') {
+                    document.documentElement.style.backgroundColor = '#1e1e1e';
+                    document.documentElement.style.color = '#00ff00';
+                }
+            }
+        });
+    </script>
+    <!-- Add Prism.js for code highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <!-- Add Fira Code font for codebreaker mode -->
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Add local resources -->
+    <link href="/codebreaker.css" rel="stylesheet">
+    <link href="/tutor.css" rel="stylesheet">
+    <script src="/tutor.js" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Tutor-Tron AI</h1>
+            <div id="subjectTitle"></div>
+        </div>
+        <div class="chat-container" id="chatContainer">
+            <!-- Messages will be added here -->
+        </div>
+        <div class="loading-animation" id="loading" style="display: none;">
+            <div class="loading-text">
+                Tutor-Tron is thinking<span class="loading-dots"></span>
+            </div>
+        </div>
+        <div class="input-section">
+            <div class="input-container">
+                <textarea id="messageInput" placeholder="Ask your question here..." rows="3"></textarea>
+                <button id="sendMessage">Send</button>
+            </div>
+            <div class="button-group">
+                <button id="speakButton">
+                    <span>🔊</span> Speak Response
+                </button>
+                <button id="copyButton">
+                    <span>📋</span> Copy Chat
+                </button>
+            </div>
+        </div>
+        <div id="errorContainer" style="display: none;">
+            <div class="error-message"></div>
+            <button id="reportError" class="report-button">
+                Report Error
+            </button>
+        </div>
+    </div>
+    <div id="floatingErrorButton" class="floating-error-button">
+        Report Console Errors
+    </div>
+</body>
+</html> 

@@ -1,108 +1,53 @@
 const fs = require('fs');
-const { exec } = require('child_process');
 const crypto = require('crypto');
+const { exec } = require('child_process');
+const path = require('path');
 
-// List of files to check from public directory
-const publicFiles = [
-    'index.html',
-    'tutor.html',
-    'pros-only-teachers.html',
-    'private-access-teachers-only.html',
-    'invalid-link.html',
-    'css.js',
-    'tutor.js',
-    'teacher-dashboard.js',
-    'register.js',
-    'index.js',
-    'tutor.css',
-    'codebreaker.css',
-    'index.css',
-    'style.css'
-];
-
-// Function to get content type
-function getContentType(path) {
-    const ext = path.split('.').pop().toLowerCase();
-    const types = {
-        'html': 'text/html',
-        'css': 'text/css',
-        'js': 'application/javascript',
-        'json': 'application/json',
-        'png': 'image/png',
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'gif': 'image/gif',
-        'svg': 'image/svg+xml'
-    };
-    return types[ext] || 'text/plain';
-}
-
-// Function to calculate file hash
+// Function to calculate MD5 hash of file
 function calculateFileHash(filePath) {
-    const content = fs.readFileSync(filePath);
+    const content = fs.readFileSync(filePath, 'utf8');
     return crypto.createHash('md5').update(content).digest('hex');
 }
 
-// Function to encode content for SQL
-function encodeForSQL(str) {
-    return Buffer.from(str).toString('base64');
-}
-
-// Function to get current file hash from D1
-async function getCurrentHash(filePath) {
-    return new Promise((resolve, reject) => {
-        const command = `wrangler d1 execute tutortron --command="SELECT file_hash FROM files WHERE path = '${filePath}';" --remote`;
-        
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Error getting hash for ${filePath}:`, error);
-                resolve(null); // Return null if there's an error
-                return;
-            }
-            
-            try {
-                const output = stdout.toString();
-                const match = output.match(/│\s+([a-f0-9]{32})\s+│/);
-                resolve(match ? match[1] : null);
-            } catch (e) {
-                console.error(`Error parsing hash for ${filePath}:`, e);
-                resolve(null);
-            }
-        });
-    });
+// Function to get content type based on file extension
+function getContentType(filePath) {
+    const ext = path.extname(filePath).toLowerCase();
+    const contentTypes = {
+        '.html': 'text/html',
+        '.css': 'text/css',
+        '.js': 'application/javascript',
+        '.json': 'application/json',
+        '.txt': 'text/plain'
+    };
+    return contentTypes[ext] || 'text/plain';
 }
 
 // Function to upload file using D1
 async function uploadFile(filePath) {
     try {
-        const fullPath = `public/${filePath}`;
-        
-        // Calculate new hash
-        const newHash = calculateFileHash(fullPath);
-        
-        // Get current hash
-        const currentHash = await getCurrentHash(fullPath);
-        
-        // If hashes match, skip upload
-        if (currentHash === newHash) {
-            console.log(`Skipping ${filePath} - no changes detected`);
-            return;
-        }
-
-        const content = fs.readFileSync(fullPath, 'utf8');
+        const content = fs.readFileSync(filePath, 'utf8');
         const contentType = getContentType(filePath);
-        const encodedContent = encodeForSQL(content);
+        const fileHash = calculateFileHash(filePath);
+        const base64Content = Buffer.from(content).toString('base64');
         
-        const command = `wrangler d1 execute tutortron --command="INSERT OR REPLACE INTO files (path, content, content_type, file_hash) VALUES ('${fullPath}', '${encodedContent}', '${contentType}', '${newHash}');" --remote`;
+        // Create a temporary SQL file
+        const sqlContent = `INSERT OR REPLACE INTO files (path, content, content_type, file_hash) VALUES ("${path.basename(filePath)}", "${base64Content}", "${contentType}", "${fileHash}");`;
+        const tempSqlFile = `temp_${Date.now()}.sql`;
+        fs.writeFileSync(tempSqlFile, sqlContent);
+        
+        const command = `wrangler d1 execute tutortron --file="${tempSqlFile}" --remote`;
         
         return new Promise((resolve, reject) => {
             exec(command, (error, stdout, stderr) => {
+                // Clean up temp file
+                fs.unlinkSync(tempSqlFile);
+                
                 if (error) {
                     console.error(`Error uploading ${filePath}:`, error);
                     reject(error);
                     return;
                 }
-                console.log(`Uploaded ${filePath} - hash: ${newHash}`);
+                console.log(`Uploaded ${filePath}`);
                 resolve();
             });
         });
@@ -112,40 +57,37 @@ async function uploadFile(filePath) {
     }
 }
 
-// Upload files sequentially
-async function uploadFiles() {
-    console.log('Starting file upload...');
-    
-    // First, ensure the table has the file_hash column
-    const addHashColumnCommand = `wrangler d1 execute tutortron --command="ALTER TABLE files ADD COLUMN IF NOT EXISTS file_hash TEXT;" --remote`;
-    
-    try {
-        await new Promise((resolve, reject) => {
-            exec(addHashColumnCommand, (error, stdout, stderr) => {
-                if (error) {
-                    console.error('Error adding hash column:', error);
-                    reject(error);
-                    return;
-                }
-                resolve();
-            });
-        });
-    } catch (error) {
-        console.error('Failed to add hash column:', error);
-    }
+// Main function to upload all files
+async function uploadAllFiles() {
+    const files = [
+        'public/index.html',
+        'public/tutor.html',
+        'public/pros-only-teachers.html',
+        'public/private-access-teachers-only.html',
+        'public/tutor.css',
+        'public/codebreaker.css',
+        'public/index.css',
+        'public/style.css',
+        'public/tutor.js',
+        'public/teacher-dashboard.js',
+        'public/index.js',
+        'public/css.js',
+        'public/code-highlighter.js',
+        'public/register.js'
+    ];
 
-    for (const file of publicFiles) {
+    for (const file of files) {
         try {
             await uploadFile(file);
+            console.log(`Successfully uploaded ${file}`);
             // Add a small delay between uploads
             await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (error) {
             console.error(`Failed to upload ${file}:`, error);
         }
     }
-    console.log('File upload complete');
 }
 
-// Start the upload process
-uploadFiles();
+// Run the upload
+uploadAllFiles().catch(console.error);
   
