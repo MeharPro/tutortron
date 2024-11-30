@@ -255,6 +255,33 @@
         .link-card.quest { border-left: 4px solid #F43F5E; }
         .link-card.codebreaker { border-left: 4px solid #0EA5E9; }
         .link-card.eliminator { border-left: 4px solid #8B5CF6; }
+
+        /* Add beta badge styles */
+        .beta-badge {
+            background: #F59E0B;
+            color: white;
+            font-size: 0.625rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 1rem;
+            margin-left: 0.5rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: inline-block;
+            vertical-align: middle;
+            animation: pulse-beta 2s infinite;
+        }
+
+        @keyframes pulse-beta {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
+
+        .mode-tab.active .beta-badge {
+            background: white;
+            color: var(--primary-color);
+        }
     </style>
 </head>
 <body>
@@ -265,8 +292,8 @@
             <div class="mode-tab active" data-mode="investigator">Investigator Mode</div>
             <div class="mode-tab" data-mode="comparitor">Comparitor Mode</div>
             <div class="mode-tab" data-mode="quest">Quest Mode</div>
-            <div class="mode-tab" data-mode="codebreaker">Codebreaker Mode</div>
-            <div class="mode-tab" data-mode="eliminator">Eliminator Mode</div>
+            <div class="mode-tab" data-mode="codebreaker">Codebreaker Mode<span class="beta-badge">Beta</span></div>
+            <div class="mode-tab" data-mode="eliminator">Eliminator Mode<span class="beta-badge">Beta</span></div>
         </div>
 
         <div class="prompt-form">
