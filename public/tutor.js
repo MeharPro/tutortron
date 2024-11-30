@@ -106,7 +106,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-opus',
                     messages: conversationHistory,
                     temperature: 0.7,
-                    max_tokens: 1000
+                    max_tokens: 400
                 })
             });
 
@@ -191,6 +191,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 body: JSON.stringify({
                     model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-opus',
                     messages: conversationHistory,
+                    temperature: 0.7,
+                    max_tokens: 400
                 })
             });
             
