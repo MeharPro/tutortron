@@ -70,6 +70,32 @@ let messageHistory = [];
 let isProcessing = false;
 let currentModelIndex = 0;
 
+// Add loading state functions
+function showLoading() {
+    const loadingDiv = document.getElementById('loading');
+    if (loadingDiv) loadingDiv.style.display = 'block';
+}
+
+function hideLoading() {
+    const loadingDiv = document.getElementById('loading');
+    if (loadingDiv) loadingDiv.style.display = 'none';
+}
+
+// Add error display function
+function showError(message) {
+    const errorDiv = document.getElementById('errorContainer');
+    if (errorDiv) {
+        const errorMessage = errorDiv.querySelector('.error-message');
+        if (errorMessage) errorMessage.textContent = message;
+        errorDiv.style.display = 'block';
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    } else {
+        console.error(message);
+    }
+}
+
 // Get next model in sequence
 function getNextModel() {
     const model = FREE_MODELS[currentModelIndex];
@@ -829,17 +855,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             copyButton.addEventListener('click', copyChat);
         }
     });
-
-    // Loading state functions
-    function showLoading() {
-        const loadingDiv = document.getElementById('loading');
-        if (loadingDiv) loadingDiv.style.display = 'block';
-    }
-
-    function hideLoading() {
-        const loadingDiv = document.getElementById('loading');
-        if (loadingDiv) loadingDiv.style.display = 'none';
-    }
 
     // Add styles for chat images
     const imageStyles = document.createElement('style');
