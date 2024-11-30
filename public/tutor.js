@@ -69,6 +69,7 @@ const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
 let messageHistory = [];
 let isProcessing = false;
 let currentModelIndex = 0;
+let chatContainer; // Add this to store the chat container reference
 
 // Add loading state functions
 function showLoading() {
@@ -96,111 +97,114 @@ function showError(message) {
     }
 }
 
-// Get next model in sequence
-function getNextModel() {
-    const model = FREE_MODELS[currentModelIndex];
-    currentModelIndex = (currentModelIndex + 1) % FREE_MODELS.length;
-    return model;
+// Move formatMathContent to global scope
+function formatMathContent(content) {
+    // Language aliases mapping
+    const languageAliases = {
+        'cpp': 'cpp',
+        'c++': 'cpp',
+        'Cpp': 'cpp',
+        'CPP': 'cpp',
+        'py': 'python',
+        'python': 'python',
+        'Python': 'python',
+        'js': 'javascript',
+        'javascript': 'javascript',
+        'JavaScript': 'javascript',
+        'java': 'java',
+        'Java': 'java',
+        'cs': 'csharp',
+        'csharp': 'csharp',
+        'c#': 'csharp',
+        'C#': 'csharp'
+    };
+
+    // First protect code blocks from other formatting
+    const codeBlocks = [];
+    content = content.replace(/```([\w+]+)?\s*([\s\S]*?)```/g, (match, lang, code) => {
+        const normalizedLang = lang ? languageAliases[lang.trim()] || lang.toLowerCase() : '';
+        codeBlocks.push({ language: normalizedLang, code: code.trim() });
+        return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+    });
+
+    // Handle LaTeX delimiters
+    content = content
+        .replace(/\\\((.*?)\\\)/g, '$ $1 $')
+        .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$')
+        .replace(/\$\$([\s\S]*?)\$\$/g, (match, tex) => {
+            return `<div class="math-display">$$ ${tex.trim()} $$</div>`;
+        })
+        .replace(/\$(.*?)\$/g, (match, tex) => {
+            return `<span class="math-inline">$ ${tex.trim()} $</span>`;
+        });
+
+    // Format bullet points
+    content = content.replace(/^\* /gm, '• ');
+
+    // Format headers
+    content = content
+        .replace(/^# (.*?)$/gm, '<h1>$1</h1>')
+        .replace(/^## (.*?)$/gm, '<h2>$1</h2>')
+        .replace(/^### (.*?)$/gm, '<h3>$1</h3>');
+
+    // Handle general formatting
+    content = content
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    // Restore code blocks with syntax highlighting
+    content = content.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
+        const block = codeBlocks[parseInt(index)];
+        const formattedCode = block.code
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        return `<pre><code class="language-${block.language}">${formattedCode}</code></pre>`;
+    });
+
+    return content;
 }
 
-// Reset model index if we get a successful response
-function resetModelIndex() {
-    currentModelIndex = 0;
-}
-
-// Remove the sendMessage function and keep only handleSendMessage
-async function handleSendMessage() {
-    if (isProcessing) return;
-    
-    const messageInput = document.getElementById('messageInput');
-    const message = messageInput.value.trim();
-    
-    if (!message) return;
-    
-    isProcessing = true;
-    showLoading();
-
-    // Display user message immediately
-    appendMessage('user', message);
-    
-    try {
-        // Try each model until one works
-        let success = false;
-        let data;
-        
-        while (!success && currentModelIndex < FREE_MODELS.length) {
-            try {
-                const model = FREE_MODELS[currentModelIndex];
-                console.log('Trying model:', model);
-                
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message,
-                        subject: window.TUTOR_CONFIG.subject,
-                        prompt: window.TUTOR_CONFIG.prompt,
-                        mode: window.TUTOR_CONFIG.mode,
-                        model,
-                        messageHistory
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    console.error('API Error:', response.status, errorData);
-                    throw new Error(`API returned ${response.status}`);
-                }
-
-                data = await response.json();
-                if (!data || !data.response) {
-                    console.error('Invalid API response:', data);
-                    throw new Error('Invalid API response format');
-                }
-
-                // Update message history with the new response
-                messageHistory = data.messageHistory || messageHistory;
-                
-                success = true;
-                currentModelIndex = 0; // Reset on success
-                
-            } catch (error) {
-                console.error(`Error with model ${FREE_MODELS[currentModelIndex]}:`, error);
-                currentModelIndex++;
-                
-                if (currentModelIndex >= FREE_MODELS.length) {
-                    throw new Error('All models failed');
-                }
-            }
-        }
-
-        if (!success) {
-            throw new Error('Failed to get response from any model');
-        }
-
-        // Display AI response
-        appendMessage('ai', data.response);
-        
-        // Clear input
-        messageInput.value = '';
-        
-    } catch (error) {
-        console.error('Error getting AI response:', error);
-        showError('Failed to get response. Please try again.');
-        currentModelIndex = 0; // Reset index after all attempts fail
-    } finally {
-        isProcessing = false;
-        hideLoading();
+// Move appendMessage to global scope
+function appendMessage(type, content) {
+    if (!chatContainer) {
+        chatContainer = document.getElementById('chatContainer');
     }
+    if (!chatContainer) {
+        console.error('Chat container not found');
+        return;
+    }
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}-message`;
+    
+    // Format content with MathJax and code highlighting
+    const formattedContent = formatMathContent(content);
+    messageDiv.innerHTML = formattedContent;
+    
+    chatContainer.appendChild(messageDiv);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    
+    // Render MathJax if ready
+    if (window.MathJax) {
+        window.MathJax.typesetPromise([messageDiv]).catch(err => 
+            console.error('MathJax error:', err)
+        );
+    }
+    
+    // Apply code highlighting
+    messageDiv.querySelectorAll('pre code').forEach((block) => {
+        if (window.hljs) {
+            window.hljs.highlightElement(block);
+        }
+    });
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
     await window.envLoaded;
     
     // Get DOM elements
-    const chatContainer = document.getElementById('chatContainer');
+    chatContainer = document.getElementById('chatContainer');
     const messageInput = document.getElementById('messageInput');
     const sendButton = document.getElementById('sendMessage');
     const loadingDiv = document.getElementById('loading');
