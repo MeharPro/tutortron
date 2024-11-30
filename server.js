@@ -643,6 +643,19 @@ router.post('/api/chat', async (request, env) => {
         if (!response.ok) {
             const error = await response.json();
             console.error('OpenRouter API error:', error);
+            if (response.status === 429) {
+                return new Response(JSON.stringify({ 
+                    error: 'Rate limit exceeded',
+                    details: 'Please try again in a few seconds'
+                }), {
+                    status: 429,
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        ...corsHeaders,
+                        'Retry-After': '2' // Suggest retry after 2 seconds
+                    }
+                });
+            }
             throw new Error(`OpenRouter API error: ${JSON.stringify(error)}`);
         }
 

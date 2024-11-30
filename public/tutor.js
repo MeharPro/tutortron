@@ -288,6 +288,88 @@ async function handleSendMessage() {
     }
 }
 
+// Add at the top with other constants
+const RATE_LIMIT_RETRY_DELAY = 2000; // 2 seconds
+const MAX_RETRIES = 3;
+
+// Update the initial API call in DOMContentLoaded
+async function makeInitialApiCall(apiKeys, systemMessage, retryCount = 0) {
+    try {
+        const model = FREE_MODELS[currentModelIndex];
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
+                'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+                'X-Title': 'Tutor-Tron'
+            },
+            body: JSON.stringify({
+                model,
+                messages: [systemMessage],
+                temperature: 0.7,
+                max_tokens: 400
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            if (response.status === 429) { // Rate limit error
+                if (retryCount < MAX_RETRIES) {
+                    console.log(`Rate limited, retrying in ${RATE_LIMIT_RETRY_DELAY}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY));
+                    return makeInitialApiCall(apiKeys, systemMessage, retryCount + 1);
+                }
+                // Try next model if available
+                currentModelIndex = (currentModelIndex + 1) % FREE_MODELS.length;
+                if (currentModelIndex !== 0) {
+                    return makeInitialApiCall(apiKeys, systemMessage, 0);
+                }
+            }
+            throw new Error(`API Error: ${JSON.stringify(errorData)}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('API call error:', error);
+        throw error;
+    }
+}
+
+// Update the handleSendMessage function's API call part
+async function tryApiCall(message, model, retryCount = 0) {
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message,
+                subject: window.TUTOR_CONFIG.subject,
+                prompt: window.TUTOR_CONFIG.prompt,
+                mode: window.TUTOR_CONFIG.mode,
+                model,
+                messageHistory
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            if (response.status === 429 && retryCount < MAX_RETRIES) {
+                console.log(`Rate limited, retrying in ${RATE_LIMIT_RETRY_DELAY}ms...`);
+                await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY));
+                return tryApiCall(message, model, retryCount + 1);
+            }
+            throw new Error(`API returned ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        throw error;
+    }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     await window.envLoaded;
     
@@ -341,33 +423,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             };
             messageHistory.push(systemMessage);
 
-            // Initial API call
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
-                    'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
-                    'X-Title': 'Tutor-Tron'
-                },
-                body: JSON.stringify({
-                    model: FREE_MODELS[currentModelIndex], // Always use first model for initial message
-                    messages: messageHistory,
-                    temperature: 0.7,
-                    max_tokens: 400
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('API Error Response:', errorData);
-                throw new Error(`API response not ok: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
-            }
-
-            const data = await response.json();
+            const data = await makeInitialApiCall(apiKeys, systemMessage);
             console.log('API Response:', data);
 
-            // Handle different response formats
             let aiMessage;
             if (data.error) {
                 console.error('API returned error:', data.error);
@@ -382,20 +440,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 } else if (data.choices[0].content) {
                     aiMessage = data.choices[0].content;
                 } else {
-                    console.error('Unexpected response format:', data);
                     throw new Error('Unexpected response format from AI');
                 }
             } else {
-                console.error('No choices in response:', data);
                 throw new Error('No response content from AI');
             }
 
-            // Just display the AI's response
             appendMessage('ai', aiMessage);
         } catch (error) {
             console.error('Full error details:', error);
             showError(`Failed to get response from tutor: ${error.message}`);
-            throw error;
         } finally {
             isProcessing = false;
             if (loadingDiv) loadingDiv.style.display = 'none';
