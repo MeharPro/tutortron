@@ -317,18 +317,169 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Add image upload UI and handlers
-    addImageUploadUI();
-    
-    const imageUpload = document.getElementById('imageUpload');
-    if (imageUpload) {
-        imageUpload.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files[0]) {
-                handleImageUpload(e.target.files[0]);
-                e.target.value = '';
-            }
-        });
+    // Image upload functionality
+    function addImageUploadUI() {
+        const inputSection = document.querySelector('.input-section');
+        const uploadContainer = document.createElement('div');
+        uploadContainer.className = 'upload-container';
+        uploadContainer.innerHTML = `
+            <div class="image-upload">
+                <label for="imageUpload" class="upload-label">
+                    <span>📷</span> Add Image
+                </label>
+                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+            </div>
+            <div id="imagePreview" class="image-preview"></div>
+        `;
+        
+        inputSection.insertBefore(uploadContainer, inputSection.firstChild);
     }
+
+    function handleImageUpload(file) {
+        const preview = document.getElementById('imagePreview');
+        const reader = new FileReader();
+        
+        reader.onload = async function(e) {
+            const div = document.createElement('div');
+            div.className = 'preview-item';
+            div.innerHTML = `
+                <img src="${e.target.result}" alt="Uploaded image">
+                <button class="remove-image" onclick="this.parentElement.remove()">×</button>
+            `;
+            preview.appendChild(div);
+
+            // Add image to conversation
+            const base64Image = e.target.result;
+            conversationHistory.push({
+                role: "user",
+                content: [
+                    {
+                        type: "text",
+                        text: "I've uploaded an image. Please analyze it."
+                    },
+                    {
+                        type: "image_url",
+                        image_url: base64Image
+                    }
+                ]
+            });
+
+            // Get AI response
+            await handleSendMessage(true);
+        };
+        
+        reader.readAsDataURL(file);
+    }
+
+    // Add image upload styles
+    const imageStyles = document.createElement('style');
+    imageStyles.textContent = `
+        .upload-container {
+            margin-bottom: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .image-upload {
+            display: flex;
+            align-items: center;
+        }
+        
+        .upload-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background-color: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .upload-label:hover {
+            background-color: #e5e7eb;
+        }
+        
+        .image-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        .preview-item {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .remove-image {
+            position: absolute;
+            top: 0.25rem;
+            right: 0.25rem;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        
+        .remove-image:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        #speakButton, #copyButton {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        #speakButton {
+            background-color: #4a9d57;
+            color: white;
+        }
+
+        #speakButton:hover {
+            background-color: #3c8746;
+        }
+
+        #copyButton {
+            background-color: #4b5563;
+            color: white;
+        }
+
+        #copyButton:hover {
+            background-color: #374151;
+        }
+    `;
+    document.head.appendChild(imageStyles);
 
     // Add styles for messages
     const messageStyles = document.createElement('style');
