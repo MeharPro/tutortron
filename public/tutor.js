@@ -374,48 +374,69 @@ document.addEventListener("DOMContentLoaded", async () => {
         showLoading();
         
         try {
-            // Always start with the first model
-            const model = FREE_MODELS[currentModelIndex];
+            // Try each model until one works
+            let success = false;
+            let data;
             
-            const response = await fetch('/api/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message,
-                    subject: window.TUTOR_CONFIG.subject,
-                    prompt: window.TUTOR_CONFIG.prompt,
-                    mode: window.TUTOR_CONFIG.mode,
-                    model
-                })
-            });
+            while (!success && currentModelIndex < FREE_MODELS.length) {
+                try {
+                    const model = FREE_MODELS[currentModelIndex];
+                    console.log('Trying model:', model); // Debug log
+                    
+                    const response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message,
+                            subject: window.TUTOR_CONFIG.subject,
+                            prompt: window.TUTOR_CONFIG.prompt,
+                            mode: window.TUTOR_CONFIG.mode,
+                            model
+                        })
+                    });
 
-            if (!response.ok) {
-                throw new Error('Failed to get AI response');
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        console.error('API Error:', response.status, errorData); // Debug log
+                        throw new Error(`API returned ${response.status}`);
+                    }
+
+                    data = await response.json();
+                    if (!data || !data.response) {
+                        console.error('Invalid API response:', data); // Debug log
+                        throw new Error('Invalid API response format');
+                    }
+
+                    success = true;
+                    currentModelIndex = 0; // Reset on success
+                    
+                } catch (error) {
+                    console.error(`Error with model ${FREE_MODELS[currentModelIndex]}:`, error);
+                    currentModelIndex++;
+                    
+                    if (currentModelIndex >= FREE_MODELS.length) {
+                        throw new Error('All models failed');
+                    }
+                }
             }
 
-            const data = await response.json();
+            if (!success) {
+                throw new Error('Failed to get response from any model');
+            }
+
+            // Display messages
             appendMessage(message, 'user');
             appendMessage(data.response, 'ai');
             
             // Clear input
             messageInput.value = '';
             
-            // Reset model index on success
-            currentModelIndex = 0;
-            
         } catch (error) {
             console.error('Error getting AI response:', error);
-            currentModelIndex++; // Try next model on failure
-            
-            if (currentModelIndex >= FREE_MODELS.length) {
-                showError('Failed to get response. Please try again.');
-                currentModelIndex = 0; // Reset after trying all models
-            } else {
-                // Retry with next model
-                handleSendMessage();
-            }
+            showError('Failed to get response. Please try again.');
+            currentModelIndex = 0; // Reset index after all attempts fail
         } finally {
             isProcessing = false;
             hideLoading();
