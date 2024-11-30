@@ -8,7 +8,8 @@
     "deploy": "git add . && git diff-index --quiet HEAD || git commit -m \"Auto-deploy update $(date)\" && git push origin main && wrangler deploy && npm run upload",
     "deploy:prod": "git add . && git diff-index --quiet HEAD || git commit -m \"Production deploy $(date)\" && git push origin main && wrangler deploy --env production && npm run upload",
     "build": "echo 'No build step required'",
-    "upload": "node upload-files.js"
+    "upload": "node upload-files.js",
+    "upload:keys": "node upload-api-keys.js"
   },
   "dependencies": {
     "itty-router": "^3.0.12"

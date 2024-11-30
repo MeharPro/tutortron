@@ -310,6 +310,49 @@ router.get('*', async (request, env) => {
     }
 });
 
+// Add API key routes
+router.get('/api/keys', async (request, env) => {
+    try {
+        const { results } = await env.DB.prepare(`
+            SELECT key_name, key_value FROM api_keys
+        `).all();
+
+        if (!results || results.length === 0) {
+            return new Response(JSON.stringify({ error: 'No API keys found' }), {
+                status: 404,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...corsHeaders
+                }
+            });
+        }
+
+        const keys = {};
+        results.forEach(row => {
+            keys[row.key_name] = row.key_value;
+        });
+
+        return new Response(JSON.stringify(keys), {
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching API keys:', error);
+        return new Response(JSON.stringify({ 
+            error: 'Failed to fetch API keys',
+            message: error.message
+        }), {
+            status: 500,
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    }
+});
+
 export default {
     fetch: (request, env) => router.handle(request, env)
 };
