@@ -65,7 +65,9 @@ const FREE_MODELS = [
 
 const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
 
-// Keep track of which model we're using
+// At the top level with other global variables
+let messageHistory = [];
+let isProcessing = false;
 let currentModelIndex = 0;
 
 // Get next model in sequence
@@ -79,9 +81,6 @@ function getNextModel() {
 function resetModelIndex() {
     currentModelIndex = 0;
 }
-
-// At the top level, keep only one message history variable
-let messageHistory = [];
 
 // Remove the sendMessage function and keep only handleSendMessage
 async function handleSendMessage() {
@@ -178,12 +177,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const sendButton = document.getElementById('sendMessage');
     const loadingDiv = document.getElementById('loading');
     
-    // State variables
+    // State variables (remove isProcessing from here since it's now global)
     let currentImage = null;
     let isSpeaking = false;
     let currentSpeech = null;
     let consoleErrors = [];
-    let isProcessing = false;
     let mathJaxReady = false;
     let currentAudio = null;
 
