@@ -593,6 +593,90 @@ router.get('*', async (request, env) => {
     }
 });
 
+// Chat endpoint
+router.post('/api/chat', async (request, env) => {
+    try {
+        const { message, subject, prompt, mode, model, image } = await request.json();
+        
+        // Prepare the API request
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+            'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+            'X-Title': 'Tutor-Tron'
+        };
+
+        // Prepare the messages array
+        const messages = [
+            {
+                role: "system",
+                content: `You are a tutor helping a student with ${subject}. ${prompt}`
+            },
+            {
+                role: "user",
+                content: message
+            }
+        ];
+
+        // If there's an image, add it to the content
+        if (image) {
+            messages[1].content = [
+                {
+                    type: "text",
+                    text: message
+                },
+                {
+                    type: "image_url",
+                    image_url: {
+                        url: `data:image/jpeg;base64,${image}`
+                    }
+                }
+            ];
+        }
+
+        // Make the API request
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                model,
+                messages,
+                temperature: 0.7,
+                max_tokens: 1000
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            console.error('OpenRouter API error:', error);
+            throw new Error(`OpenRouter API error: ${JSON.stringify(error)}`);
+        }
+
+        const data = await response.json();
+        return new Response(JSON.stringify({
+            response: data.choices[0].message.content
+        }), {
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+
+    } catch (error) {
+        console.error('Chat error:', error);
+        return new Response(JSON.stringify({ 
+            error: 'Failed to get AI response',
+            details: error.message
+        }), {
+            status: 500,
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    }
+});
+
 export default {
     fetch: (request, env) => router.handle(request, env)
 };
