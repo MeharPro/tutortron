@@ -110,6 +110,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             const data = await response.json();
+            if (!data || !data.choices || !data.choices[0] || !data.choices[0].message) {
+                throw new Error('Invalid response format from AI');
+            }
+
             const aiMessage = data.choices[0].message.content;
             
             // Add AI's response to conversation history

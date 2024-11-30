@@ -424,51 +424,42 @@ router.get('/api/links/:id', async (request, env) => {
 // Delete a link
 router.delete('/api/links/:id', async (request, env) => {
     try {
-        const user = await authenticate(request, env);
+        const token = request.headers.get('Authorization')?.split(' ')[1];
+        if (!token) {
+            return new Response('Unauthorized', { status: 401 });
+        }
+
+        // Verify token and get user email
+        const user = await env.TEACHERS.get(token, { type: 'json' });
         if (!user) {
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                status: 401,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
-                }
-            });
+            return new Response('Unauthorized', { status: 401 });
         }
 
-        const url = new URL(request.url);
-        const id = url.pathname.split('/').pop();
+        const { id } = request.params;
 
-        // Remove link from user's links array
-        if (user.links) {
-            const linkIndex = user.links.findIndex(l => l.id === id);
-            if (linkIndex !== -1) {
-                user.links.splice(linkIndex, 1);
-                // Update user in KV
-                await env.TEACHERS.put(user.email, JSON.stringify(user));
-            }
+        // Delete from D1
+        await env.DB.prepare('DELETE FROM links WHERE id = ? AND user_email = ?')
+            .bind(id, user.email)
+            .run();
+
+        // Also remove from user's links in KV
+        const updatedUser = { ...user };
+        if (updatedUser.links) {
+            updatedUser.links = updatedUser.links.filter(link => link.id !== id);
+            await env.TEACHERS.put(token, JSON.stringify(updatedUser));
         }
 
-        // Remove individual link from KV
+        // Delete from separate KV storage if exists
         await env.TEACHERS.delete(`link:${id}`);
 
         return new Response(JSON.stringify({ success: true }), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
     } catch (error) {
         console.error('Error deleting link:', error);
-        return new Response(JSON.stringify({ 
-            error: 'Failed to delete link',
-            message: error.message,
-            stack: error.stack
-        }), {
+        return new Response(JSON.stringify({ error: 'Failed to delete link' }), {
             status: 500,
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
     }
 });
