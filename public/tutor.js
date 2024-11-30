@@ -753,70 +753,148 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Get all messages
         const messages = chatContainer.getElementsByClassName('message');
         Array.from(messages).forEach(message => {
-            const role = message.classList.contains('user-message') ? 'You' : 'Tutor';
-            const content = message.textContent.trim();
-            chatText += `${role}: ${content}\n\n`;
+            // Determine if it's user or AI message
+            const isUser = message.classList.contains('user-message');
+            const role = isUser ? 'You' : 'Tutor';
+            
+            // Get message content, handling both text and images
+            let content = '';
+            if (message.querySelector('img')) {
+                content = '[Image]';
+            } else {
+                // Clean up the text content
+                content = message.textContent
+                    .replace(/Copy code/g, '') // Remove "Copy code" buttons
+                    .replace(/\n{3,}/g, '\n\n') // Replace multiple newlines with double newline
+                    .trim();
+            }
+            
+            // Add to chat text
+            if (content) {
+                chatText += `${role}: ${content}\n\n`;
+            }
         });
         
+        // Try using the modern clipboard API first
         try {
-            // Use the newer clipboard API with fallback
-            if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(chatText);
-                showCopySuccess();
+            await navigator.clipboard.writeText(chatText);
+            showCopySuccess();
+        } catch (err) {
+            // Fallback for browsers that don't support clipboard API
+            const textArea = document.createElement('textarea');
+            textArea.value = chatText;
+            
+            // Make the textarea invisible but still selectable
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            textArea.style.left = '0';
+            textArea.style.top = '0';
+            
+            document.body.appendChild(textArea);
+            
+            // Special handling for iOS
+            if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                const range = document.createRange();
+                range.selectNodeContents(textArea);
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                textArea.setSelectionRange(0, 999999);
             } else {
-                fallbackCopyToClipboard(chatText);
+                textArea.select();
             }
-        } catch (error) {
-            console.error('Copy failed:', error);
-            fallbackCopyToClipboard(chatText);
+            
+            try {
+                document.execCommand('copy');
+                showCopySuccess();
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                showCopyError();
+            }
+            
+            document.body.removeChild(textArea);
         }
     }
 
-    // Show copy success message
+    // Show copy success message with toast
     function showCopySuccess() {
+        // Update button state
         const copyButton = document.getElementById('copyButton');
         const originalText = copyButton.innerHTML;
         copyButton.innerHTML = '<span>✓</span> Copied!';
         
         // Show toast notification
-        const toast = document.createElement('div');
-        toast.className = 'copy-toast';
-        toast.textContent = 'Chat copied to clipboard!';
-        document.body.appendChild(toast);
+        showToast('Chat copied to clipboard!', 'success');
         
-        // Remove toast after animation
+        // Reset button after delay
         setTimeout(() => {
-            document.body.removeChild(toast);
             copyButton.innerHTML = originalText;
         }, 2000);
     }
 
-    // Add toast notification styles
-    const toastStyle = document.createElement('style');
-    toastStyle.textContent = `
-        .copy-toast {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #4CAF50;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 14px;
-            z-index: 1000;
-            animation: toast-fade 2s ease;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    // Show copy error message
+    function showCopyError() {
+        showToast('Failed to copy chat. Please try again.', 'error');
+    }
+
+    // Toast notification system
+    function showToast(message, type = 'success') {
+        // Remove existing toast if any
+        const existingToast = document.querySelector('.toast');
+        if (existingToast) {
+            document.body.removeChild(existingToast);
         }
         
-        @keyframes toast-fade {
-            0% { opacity: 0; transform: translate(-50%, 20px); }
-            10% { opacity: 1; transform: translate(-50%, 0); }
-            90% { opacity: 1; transform: translate(-50%, 0); }
-            100% { opacity: 0; transform: translate(-50%, -20px); }
+        // Create new toast
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        
+        // Add toast styles if not already added
+        if (!document.getElementById('toastStyles')) {
+            const style = document.createElement('style');
+            style.id = 'toastStyles';
+            style.textContent = `
+                .toast {
+                    position: fixed;
+                    bottom: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    color: white;
+                    font-size: 14px;
+                    z-index: 10000;
+                    animation: toast-fade 2s ease;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                }
+                
+                .toast-success {
+                    background-color: #4CAF50;
+                }
+                
+                .toast-error {
+                    background-color: #f44336;
+                }
+                
+                @keyframes toast-fade {
+                    0% { opacity: 0; transform: translate(-50%, 20px); }
+                    10% { opacity: 1; transform: translate(-50%, 0); }
+                    90% { opacity: 1; transform: translate(-50%, 0); }
+                    100% { opacity: 0; transform: translate(-50%, -20px); }
+                }
+            `;
+            document.head.appendChild(style);
         }
-    `;
-    document.head.appendChild(toastStyle);
+        
+        // Add to document and remove after animation
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            if (toast.parentNode) {
+                document.body.removeChild(toast);
+            }
+        }, 2000);
+    }
 
     // Event listeners for buttons
     document.addEventListener('DOMContentLoaded', () => {
@@ -840,4 +918,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             copyButton.addEventListener('click', copyChat);
         }
     });
+
+    // Loading state functions
+    function showLoading() {
+        const loadingDiv = document.getElementById('loading');
+        if (loadingDiv) loadingDiv.style.display = 'block';
+    }
+
+    function hideLoading() {
+        const loadingDiv = document.getElementById('loading');
+        if (loadingDiv) loadingDiv.style.display = 'none';
+    }
 }); 
