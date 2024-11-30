@@ -362,68 +362,63 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     // Update handleSendMessage to handle image messages
-    async function handleSendMessage(isImageMessage = false) {
-        if (isProcessing || (!isImageMessage && !messageInput.value.trim())) return;
+    async function handleSendMessage() {
+        if (isProcessing) return;
         
-        const userMessage = isImageMessage ? '' : messageInput.value.trim();
-        if (!isImageMessage) {
-            messageInput.value = '';
-        }
+        const messageInput = document.getElementById('messageInput');
+        const message = messageInput.value.trim();
         
-        if (!isImageMessage) {
-            appendMessage('user', userMessage);
-        }
+        if (!message) return;
         
         isProcessing = true;
-        if (loadingDiv) loadingDiv.style.display = 'block';
+        showLoading();
         
         try {
-            if (!isImageMessage) {
-                // Add user message to history
-                conversationHistory.push({
-                    role: "user",
-                    content: userMessage
-                });
-            }
+            // Always start with the first model
+            const model = FREE_MODELS[currentModelIndex];
             
-            // Get AI response
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
-                    'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
-                    'X-Title': 'Tutor-Tron'
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    model: imageBase64 ? VISION_MODEL : FREE_MODELS[currentModelIndex],
-                    messages: conversationHistory,
-                    temperature: 0.7,
-                    max_tokens: 400
+                    message,
+                    subject: window.TUTOR_CONFIG.subject,
+                    prompt: window.TUTOR_CONFIG.prompt,
+                    mode: window.TUTOR_CONFIG.mode,
+                    model
                 })
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to get AI response');
             }
-            
+
             const data = await response.json();
-            const aiMessage = data.choices[0].message.content;
+            appendMessage(message, 'user');
+            appendMessage(data.response, 'ai');
             
-            // Add AI's response to history
-            conversationHistory.push({
-                role: "assistant",
-                content: aiMessage
-            });
+            // Clear input
+            messageInput.value = '';
             
-            // Display the AI's response
-            appendMessage('ai', aiMessage);
+            // Reset model index on success
+            currentModelIndex = 0;
+            
         } catch (error) {
             console.error('Error getting AI response:', error);
-            showError('Failed to get response from tutor. Please try again.');
+            currentModelIndex++; // Try next model on failure
+            
+            if (currentModelIndex >= FREE_MODELS.length) {
+                showError('Failed to get response. Please try again.');
+                currentModelIndex = 0; // Reset after trying all models
+            } else {
+                // Retry with next model
+                handleSendMessage();
+            }
         } finally {
             isProcessing = false;
-            if (loadingDiv) loadingDiv.style.display = 'none';
+            hideLoading();
         }
     }
 
