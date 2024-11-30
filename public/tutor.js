@@ -790,65 +790,62 @@ document.addEventListener("DOMContentLoaded", async () => {
                     .trim();
             }
             
-            // Add to chat text
+            // Add to chat text if there's content
             if (content) {
                 chatText += `${role}: ${content}\n\n`;
             }
         });
         
-        // Try using the modern clipboard API first
         try {
-            await navigator.clipboard.writeText(chatText);
-            showCopySuccess();
-        } catch (err) {
-            // Fallback for browsers that don't support clipboard API
-            const textArea = document.createElement('textarea');
-            textArea.value = chatText;
-            
-            // Make the textarea invisible but still selectable
-            textArea.style.position = 'fixed';
-            textArea.style.opacity = '0';
-            textArea.style.left = '0';
-            textArea.style.top = '0';
-            
-            document.body.appendChild(textArea);
-            
-            // Special handling for iOS
-            if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-                const range = document.createRange();
-                range.selectNodeContents(textArea);
-                const selection = window.getSelection();
-                selection.removeAllRanges();
-                selection.addRange(range);
-                textArea.setSelectionRange(0, 999999);
-            } else {
-                textArea.select();
-            }
-            
-            try {
-                document.execCommand('copy');
+            // Use the newer clipboard API with fallback
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(chatText);
                 showCopySuccess();
-            } catch (err) {
-                console.error('Failed to copy:', err);
-                showCopyError();
+            } else {
+                fallbackCopyToClipboard(chatText);
             }
-            
-            document.body.removeChild(textArea);
+        } catch (error) {
+            console.error('Copy failed:', error);
+            fallbackCopyToClipboard(chatText);
         }
     }
 
-    // Show copy success message with toast
+    // Fallback copy function
+    function fallbackCopyToClipboard(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        
+        try {
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showCopySuccess();
+        } catch (error) {
+            console.error('Fallback copy failed:', error);
+            document.body.removeChild(textArea);
+            showCopyError();
+        }
+    }
+
+    // Show copy success message
     function showCopySuccess() {
-        // Update button state
         const copyButton = document.getElementById('copyButton');
         const originalText = copyButton.innerHTML;
         copyButton.innerHTML = '<span>✓</span> Copied!';
         
         // Show toast notification
-        showToast('Chat copied to clipboard!', 'success');
+        const toast = document.createElement('div');
+        toast.className = 'copy-toast';
+        toast.textContent = 'Chat copied to clipboard!';
+        document.body.appendChild(toast);
         
-        // Reset button after delay
+        // Remove toast after animation
         setTimeout(() => {
+            document.body.removeChild(toast);
             copyButton.innerHTML = originalText;
         }, 2000);
     }
@@ -857,6 +854,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     function showCopyError() {
         showToast('Failed to copy chat. Please try again.', 'error');
     }
+
+    // Add event listener for copy button
+    document.getElementById('copyButton').addEventListener('click', copyChat);
 
     // Toast notification system
     function showToast(message, type = 'success') {

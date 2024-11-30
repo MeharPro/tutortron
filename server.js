@@ -606,33 +606,30 @@ router.post('/api/chat', async (request, env) => {
             'X-Title': 'Tutor-Tron'
         };
 
-        // Prepare the messages array with system message
+        // Prepare the messages array
         const messages = [
             {
                 role: "system",
                 content: `You are a tutor helping a student with ${subject}. ${prompt}`
+            },
+            {
+                role: "user",
+                content: image ? [
+                    {
+                        type: "text",
+                        text: message || "Please help me understand this."
+                    },
+                    {
+                        type: "image_url",
+                        image_url: {
+                            url: `data:image/jpeg;base64,${image}`
+                        }
+                    }
+                ] : message
             }
         ];
 
-        // Add user message with image if present
-        const userMessage = {
-            role: "user",
-            content: image ? [
-                {
-                    type: "text",
-                    text: prompt + "\n\n" + (message || "Please help me understand this.")
-                },
-                {
-                    type: "image_url",
-                    image_url: {
-                        url: `data:image/jpeg;base64,${image}`
-                    }
-                }
-            ] : message
-        };
-        messages.push(userMessage);
-
-        // Use vision model if image is present
+        // Always use meta-llama/llama-3.2-90b-vision-instruct:free for image messages
         const selectedModel = image ? 'meta-llama/llama-3.2-90b-vision-instruct:free' : model;
 
         console.log('Using model:', selectedModel); // Debug log
