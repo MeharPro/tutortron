@@ -182,6 +182,7 @@ router.get('/api/links', async (request, env) => {
     try {
         const user = await authenticate(request, env);
         if (!user) {
+            console.error('No authenticated user found');
             return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                 status: 401,
                 headers: { 
@@ -191,21 +192,45 @@ router.get('/api/links', async (request, env) => {
             });
         }
 
+        console.log('Getting links for user:', user.email);
+
         // Get links from D1
-        const { results: d1Links } = await env.DB.prepare(`
+        const d1Result = await env.DB.prepare(`
             SELECT * FROM links WHERE user_email = ? ORDER BY created_at DESC
         `).bind(user.email).all();
+        
+        console.log('D1 query result:', d1Result);
+        const d1Links = d1Result.results || [];
+        console.log('D1 links:', d1Links);
 
         // Get links from KV
         const kvLinks = user.links || [];
+        console.log('KV links:', kvLinks);
 
         // Combine and deduplicate links
         const allLinks = [...d1Links];
         for (const kvLink of kvLinks) {
             if (!allLinks.some(link => link.id === kvLink.id)) {
+                // Store KV link in D1 for future access
+                try {
+                    await env.DB.prepare(`
+                        INSERT INTO links (id, mode, subject, prompt, created_at, user_email)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    `).bind(
+                        kvLink.id,
+                        kvLink.mode,
+                        kvLink.subject,
+                        kvLink.prompt,
+                        kvLink.created || kvLink.created_at,
+                        user.email
+                    ).run();
+                } catch (error) {
+                    console.error('Error migrating KV link to D1:', error);
+                }
                 allLinks.push(kvLink);
             }
         }
+        console.log('Combined links:', allLinks);
 
         // Sort by created date
         allLinks.sort((a, b) => {
@@ -222,9 +247,12 @@ router.get('/api/links', async (request, env) => {
         });
     } catch (error) {
         console.error('Error fetching links:', error);
+        console.error('Error stack:', error.stack);
         return new Response(JSON.stringify({ 
             error: 'Failed to fetch links',
-            message: error.message
+            message: error.message,
+            stack: error.stack,
+            cause: error.cause
         }), {
             status: 500,
             headers: { 
@@ -264,27 +292,29 @@ router.post('/api/links', async (request, env) => {
         }
 
         const id = crypto.randomUUID();
-        const link = {
-            id,
-            mode,
-            subject,
-            prompt,
-            created: new Date().toISOString(),
-            user_email: user.email
-        };
-
+        const created = new Date().toISOString();
+        
         // Store in D1
         await env.DB.prepare(`
             INSERT INTO links (id, mode, subject, prompt, created_at, user_email)
             VALUES (?, ?, ?, ?, ?, ?)
         `).bind(
-            link.id,
-            link.mode,
-            link.subject,
-            link.prompt,
-            link.created,
-            link.user_email
+            id,
+            mode,
+            subject,
+            prompt,
+            created,
+            user.email
         ).run();
+
+        const link = {
+            id,
+            mode,
+            subject,
+            prompt,
+            created,
+            user_email: user.email
+        };
 
         // Also store in KV for backward compatibility
         if (!user.links) {
@@ -307,7 +337,8 @@ router.post('/api/links', async (request, env) => {
         console.error('Error creating link:', error);
         return new Response(JSON.stringify({ 
             error: 'Failed to create link',
-            message: error.message
+            message: error.message,
+            stack: error.stack
         }), {
             status: 500,
             headers: { 
