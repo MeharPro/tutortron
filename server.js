@@ -141,38 +141,40 @@ router.get('/api/auth/verify', async (request, env) => {
     });
 });
 
+// API keys endpoint
 router.get('/api/keys', async (request, env) => {
     try {
-        // Get API keys from KV
-        const keys = await env.TEACHERS.get('api_keys', { type: 'json' });
-        
-        if (!keys) {
-            return new Response(JSON.stringify({ error: 'No API keys found' }), {
-                status: 404,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
-                }
+        // First try D1
+        const { results } = await env.DB.prepare(`
+            SELECT key_value FROM api_keys WHERE key_name = 'OPENROUTER_API_KEY'
+        `).all();
+
+        if (results && results.length > 0) {
+            return new Response(JSON.stringify({
+                OPENROUTER_API_KEY: results[0].key_value
+            }), {
+                headers: { 'Content-Type': 'application/json' }
             });
         }
 
-        return new Response(JSON.stringify(keys), {
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+        // Fallback to environment variable
+        if (env.OPENROUTER_API_KEY) {
+            return new Response(JSON.stringify({
+                OPENROUTER_API_KEY: env.OPENROUTER_API_KEY
+            }), {
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        return new Response(JSON.stringify({ error: 'API key not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
         });
     } catch (error) {
         console.error('Error fetching API keys:', error);
-        return new Response(JSON.stringify({ 
-            error: 'Failed to fetch API keys',
-            message: error.message
-        }), {
+        return new Response(JSON.stringify({ error: 'Failed to fetch API keys' }), {
             status: 500,
-            headers: { 
-                'Content-Type': 'application/json',
-                ...corsHeaders
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
     }
 });

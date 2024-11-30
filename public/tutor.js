@@ -62,6 +62,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
         const response = await fetch('/api/keys');
         apiKeys = await response.json();
+        if (!apiKeys || !apiKeys.OPENROUTER_API_KEY) {
+            throw new Error('API key not found');
+        }
     } catch (error) {
         console.error('Failed to fetch API keys:', error);
         showError('Failed to initialize the tutor. Please try again later.');
@@ -102,18 +105,27 @@ document.addEventListener("DOMContentLoaded", async () => {
                 body: JSON.stringify({
                     model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-opus',
                     messages: conversationHistory,
+                    temperature: 0.7,
+                    max_tokens: 1000
                 })
             });
 
             if (!response.ok) {
-                throw new Error(`API response not ok: ${response.status} ${response.statusText}`);
+                const errorData = await response.json();
+                console.error('API Error Response:', errorData);
+                throw new Error(`API response not ok: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
             }
 
             const data = await response.json();
-            console.log('API Response:', data); // Debug log
+            console.log('API Response:', data);
 
             // Handle different response formats
             let aiMessage;
+            if (data.error) {
+                console.error('API returned error:', data.error);
+                throw new Error(`API Error: ${JSON.stringify(data.error)}`);
+            }
+            
             if (data.choices && data.choices[0]) {
                 if (data.choices[0].message && data.choices[0].message.content) {
                     aiMessage = data.choices[0].message.content;
@@ -140,7 +152,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             appendMessage('ai', aiMessage);
         } catch (error) {
             console.error('Full error details:', error);
-            showError('Failed to get response from tutor. Please try again.');
+            showError(`Failed to get response from tutor: ${error.message}`);
             throw error;
         } finally {
             isProcessing = false;
