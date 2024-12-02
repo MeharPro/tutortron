@@ -593,6 +593,108 @@ router.get('*', async (request, env) => {
     }
 });
 
+// Chat endpoint
+router.post('/api/chat', async (request, env) => {
+    try {
+        const { message, subject, prompt, mode, model, image, messageHistory = [] } = await request.json();
+        
+        // Prepare the messages array with history
+        const messages = [
+            {
+                role: "system",
+                content: `You are a teacher named Tutor-Tron helping a student with ${subject}. ${prompt}`
+            },
+            ...messageHistory,
+            {
+                role: "user",
+                content: image ? [
+                    {
+                        type: "text",
+                        text: message || "Please help me understand this."
+                    },
+                    {
+                        type: "image_url",
+                        image_url: {
+                            url: `data:image/jpeg;base64,${image}`
+                        }
+                    }
+                ] : message
+            }
+        ];
+
+        console.log('Sending messages to API:', JSON.stringify(messages)); // Debug log
+
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+                'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+                'X-Title': 'Tutor-Tron'
+            },
+            body: JSON.stringify({
+                model: model || FREE_MODELS[0], // Use first model if none specified
+                messages,
+                temperature: 0.7,
+                max_tokens: 1000
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            console.error('OpenRouter API error:', error);
+            if (response.status === 429) {
+                return new Response(JSON.stringify({ 
+                    error: 'Rate limit exceeded',
+                    details: 'Please try again in a few seconds'
+                }), {
+                    status: 429,
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        ...corsHeaders,
+                        'Retry-After': '2' // Suggest retry after 2 seconds
+                    }
+                });
+            }
+            throw new Error(`OpenRouter API error: ${JSON.stringify(error)}`);
+        }
+
+        const data = await response.json();
+        console.log('API Response:', data); // Debug log
+
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+            throw new Error('Invalid response format from API');
+        }
+
+        return new Response(JSON.stringify({
+            response: data.choices[0].message.content,
+            messageHistory: [
+                ...messageHistory,
+                { role: "user", content: message },
+                { role: "assistant", content: data.choices[0].message.content }
+            ]
+        }), {
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+
+    } catch (error) {
+        console.error('Chat error:', error);
+        return new Response(JSON.stringify({ 
+            error: 'Failed to get AI response',
+            details: error.message
+        }), {
+            status: 500,
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        });
+    }
+});
+
 export default {
     fetch: (request, env) => router.handle(request, env)
 };

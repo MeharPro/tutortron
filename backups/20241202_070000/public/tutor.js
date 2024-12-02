@@ -51,22 +51,339 @@ highlightCSS.rel = 'stylesheet';
 highlightCSS.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css';
 document.head.appendChild(highlightCSS);
 
+// Define available models in order of preference
+const FREE_MODELS = [
+    "meta-llama/llama-3.2-90b-vision-instruct:free",
+    "google/learnlm-1.5-pro-experimental:free",
+    "meta-llama/llama-3.1-405b-instruct:free",
+    "liquid/lfm-40b:free",
+    "google/gemini-exp-1114",
+    "meta-llama/llama-3.1-70b-instruct:free",
+    "google/gemma-2-9b-it:free",
+    "qwen/qwen-2-7b-instruct:free"
+];
+
+const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
+
+// At the top level with other global variables
+let messageHistory = [];
+let isProcessing = false;
+let currentModelIndex = 0;
+let chatContainer; // Add this to store the chat container reference
+
+// Add loading state functions
+function showLoading() {
+    const loadingDiv = document.getElementById('loading');
+    if (loadingDiv) loadingDiv.style.display = 'block';
+}
+
+function hideLoading() {
+    const loadingDiv = document.getElementById('loading');
+    if (loadingDiv) loadingDiv.style.display = 'none';
+}
+
+// Add error display function
+function showError(message) {
+    const errorDiv = document.getElementById('errorContainer');
+    if (errorDiv) {
+        const errorMessage = errorDiv.querySelector('.error-message');
+        if (errorMessage) errorMessage.textContent = message;
+        errorDiv.style.display = 'block';
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    } else {
+        console.error(message);
+    }
+}
+
+// Move formatMathContent to global scope
+function formatMathContent(content) {
+    // Language aliases mapping
+    const languageAliases = {
+        'cpp': 'cpp',
+        'c++': 'cpp',
+        'Cpp': 'cpp',
+        'CPP': 'cpp',
+        'py': 'python',
+        'python': 'python',
+        'Python': 'python',
+        'js': 'javascript',
+        'javascript': 'javascript',
+        'JavaScript': 'javascript',
+        'java': 'java',
+        'Java': 'java',
+        'cs': 'csharp',
+        'csharp': 'csharp',
+        'c#': 'csharp',
+        'C#': 'csharp'
+    };
+
+    // First protect code blocks from other formatting
+    const codeBlocks = [];
+    content = content.replace(/```([\w+]+)?\s*([\s\S]*?)```/g, (match, lang, code) => {
+        const normalizedLang = lang ? languageAliases[lang.trim()] || lang.toLowerCase() : '';
+        codeBlocks.push({ language: normalizedLang, code: code.trim() });
+        return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+    });
+
+    // Handle LaTeX delimiters
+    content = content
+        .replace(/\\\((.*?)\\\)/g, '$ $1 $')
+        .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$')
+        .replace(/\$\$([\s\S]*?)\$\$/g, (match, tex) => {
+            return `<div class="math-display">$$ ${tex.trim()} $$</div>`;
+        })
+        .replace(/\$(.*?)\$/g, (match, tex) => {
+            return `<span class="math-inline">$ ${tex.trim()} $</span>`;
+        });
+
+    // Format bullet points
+    content = content.replace(/^\* /gm, '• ');
+
+    // Format headers
+    content = content
+        .replace(/^# (.*?)$/gm, '<h1>$1</h1>')
+        .replace(/^## (.*?)$/gm, '<h2>$1</h2>')
+        .replace(/^### (.*?)$/gm, '<h3>$1</h3>');
+
+    // Handle general formatting
+    content = content
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    // Restore code blocks with syntax highlighting
+    content = content.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
+        const block = codeBlocks[parseInt(index)];
+        const formattedCode = block.code
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        return `<pre><code class="language-${block.language}">${formattedCode}</code></pre>`;
+    });
+
+    return content;
+}
+
+// Move appendMessage to global scope
+function appendMessage(type, content) {
+    if (!chatContainer) {
+        chatContainer = document.getElementById('chatContainer');
+    }
+    if (!chatContainer) {
+        console.error('Chat container not found');
+        return;
+    }
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}-message`;
+    
+    // Format content with MathJax and code highlighting
+    const formattedContent = formatMathContent(content);
+    messageDiv.innerHTML = formattedContent;
+    
+    chatContainer.appendChild(messageDiv);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    
+    // Render MathJax if ready
+    if (window.MathJax) {
+        window.MathJax.typesetPromise([messageDiv]).catch(err => 
+            console.error('MathJax error:', err)
+        );
+    }
+    
+    // Apply code highlighting
+    messageDiv.querySelectorAll('pre code').forEach((block) => {
+        if (window.hljs) {
+            window.hljs.highlightElement(block);
+        }
+    });
+}
+
+// Add this after the appendMessage function and before the DOMContentLoaded event listener
+async function handleSendMessage() {
+    if (isProcessing) return;
+    
+    const messageInput = document.getElementById('messageInput');
+    const message = messageInput.value.trim();
+    
+    if (!message) return;
+    
+    isProcessing = true;
+    showLoading();
+
+    // Display user message immediately
+    appendMessage('user', message);
+    
+    try {
+        // Try each model until one works
+        let success = false;
+        let data;
+        
+        while (!success && currentModelIndex < FREE_MODELS.length) {
+            try {
+                const model = FREE_MODELS[currentModelIndex];
+                console.log('Trying model:', model);
+                
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message,
+                        subject: window.TUTOR_CONFIG.subject,
+                        prompt: window.TUTOR_CONFIG.prompt,
+                        mode: window.TUTOR_CONFIG.mode,
+                        model,
+                        messageHistory
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('API Error:', response.status, errorData);
+                    throw new Error(`API returned ${response.status}`);
+                }
+
+                data = await response.json();
+                if (!data || !data.response) {
+                    console.error('Invalid API response:', data);
+                    throw new Error('Invalid API response format');
+                }
+
+                // Update message history with the new response
+                messageHistory = data.messageHistory || messageHistory;
+                
+                success = true;
+                currentModelIndex = 0; // Reset on success
+                
+            } catch (error) {
+                console.error(`Error with model ${FREE_MODELS[currentModelIndex]}:`, error);
+                currentModelIndex++;
+                
+                if (currentModelIndex >= FREE_MODELS.length) {
+                    throw new Error('All models failed');
+                }
+            }
+        }
+
+        if (!success) {
+            throw new Error('Failed to get response from any model');
+        }
+
+        // Display AI response
+        appendMessage('ai', data.response);
+        
+        // Clear input
+        messageInput.value = '';
+        
+    } catch (error) {
+        console.error('Error getting AI response:', error);
+        showError('Failed to get response. Please try again.');
+        currentModelIndex = 0; // Reset index after all attempts fail
+    } finally {
+        isProcessing = false;
+        hideLoading();
+    }
+}
+
+// Add at the top with other constants
+const RATE_LIMIT_RETRY_DELAY = 2000; // 2 seconds
+const MAX_RETRIES = 3;
+
+// Update the initial API call in DOMContentLoaded
+async function makeInitialApiCall(apiKeys, systemMessage, retryCount = 0) {
+    try {
+        const model = FREE_MODELS[currentModelIndex];
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
+                'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+                'X-Title': 'Tutor-Tron'
+            },
+            body: JSON.stringify({
+                model,
+                messages: [systemMessage],
+                temperature: 0.7,
+                max_tokens: 400
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            if (response.status === 429) { // Rate limit error
+                if (retryCount < MAX_RETRIES) {
+                    console.log(`Rate limited, retrying in ${RATE_LIMIT_RETRY_DELAY}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY));
+                    return makeInitialApiCall(apiKeys, systemMessage, retryCount + 1);
+                }
+                // Try next model if available
+                currentModelIndex = (currentModelIndex + 1) % FREE_MODELS.length;
+                if (currentModelIndex !== 0) {
+                    return makeInitialApiCall(apiKeys, systemMessage, 0);
+                }
+            }
+            throw new Error(`API Error: ${JSON.stringify(errorData)}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('API call error:', error);
+        throw error;
+    }
+}
+
+// Update the handleSendMessage function's API call part
+async function tryApiCall(message, model, retryCount = 0) {
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message,
+                subject: window.TUTOR_CONFIG.subject,
+                prompt: window.TUTOR_CONFIG.prompt,
+                mode: window.TUTOR_CONFIG.mode,
+                model,
+                messageHistory
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            if (response.status === 429 && retryCount < MAX_RETRIES) {
+                console.log(`Rate limited, retrying in ${RATE_LIMIT_RETRY_DELAY}ms...`);
+                await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY));
+                return tryApiCall(message, model, retryCount + 1);
+            }
+            throw new Error(`API returned ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        throw error;
+    }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     await window.envLoaded;
     
     // Get DOM elements
-    const chatContainer = document.getElementById('chatContainer');
+    chatContainer = document.getElementById('chatContainer');
     const messageInput = document.getElementById('messageInput');
     const sendButton = document.getElementById('sendMessage');
     const loadingDiv = document.getElementById('loading');
     
-    // State variables
-    const conversationHistory = [];
+    // State variables (remove isProcessing from here since it's now global)
     let currentImage = null;
     let isSpeaking = false;
     let currentSpeech = null;
     let consoleErrors = [];
-    let isProcessing = false;
     let mathJaxReady = false;
     let currentAudio = null;
 
@@ -104,35 +421,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 role: "system",
                 content: `You are a tutor helping a student with ${subject}. ${prompt}`
             };
-            conversationHistory.push(systemMessage);
+            messageHistory.push(systemMessage);
 
-            // Get initial response from AI
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
-                    'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
-                    'X-Title': 'Tutor-Tron'
-                },
-                body: JSON.stringify({
-                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-sonnet-vision',
-                    messages: conversationHistory,
-                    temperature: 0.7,
-                    max_tokens: 400
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('API Error Response:', errorData);
-                throw new Error(`API response not ok: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
-            }
-
-            const data = await response.json();
+            const data = await makeInitialApiCall(apiKeys, systemMessage);
             console.log('API Response:', data);
 
-            // Handle different response formats
             let aiMessage;
             if (data.error) {
                 console.error('API returned error:', data.error);
@@ -147,32 +440,24 @@ document.addEventListener("DOMContentLoaded", async () => {
                 } else if (data.choices[0].content) {
                     aiMessage = data.choices[0].content;
                 } else {
-                    console.error('Unexpected response format:', data);
                     throw new Error('Unexpected response format from AI');
                 }
             } else {
-                console.error('No choices in response:', data);
                 throw new Error('No response content from AI');
             }
 
-            // Add AI's response to conversation history
-            conversationHistory.push({
-                role: "assistant",
-                content: aiMessage
-            });
-
-            // Display the AI's response
             appendMessage('ai', aiMessage);
         } catch (error) {
             console.error('Full error details:', error);
             showError(`Failed to get response from tutor: ${error.message}`);
-            throw error;
         } finally {
             isProcessing = false;
             if (loadingDiv) loadingDiv.style.display = 'none';
         }
     }
 
+    // Temporarily disable image upload functionality
+    /*
     // Add image upload button to button group
     const buttonGroup = document.querySelector('.button-group');
     const imageButton = document.createElement('button');
@@ -212,11 +497,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                     reader.readAsDataURL(file);
                 });
 
-                // Add image message to chat
-                appendMessage('user', `[Uploaded Image]\n${base64Image}`);
+                // Add image to chat
+                appendMessage('user', base64Image);
 
                 // Add to conversation history
-                conversationHistory.push({
+                messageHistory.push({
                     role: "user",
                     content: [
                         {
@@ -232,84 +517,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 // Get AI response
                 await handleSendMessage(true);
+
             } catch (error) {
-                console.error('Error uploading image:', error);
+                console.error('Image upload error:', error);
                 showError('Failed to upload image. Please try again.');
             } finally {
-                // Reset button state
                 imageButton.disabled = false;
                 imageButton.innerHTML = '<span>🖼️</span> Add Image';
-                // Reset file input
-                fileInput.value = '';
             }
         }
     });
-
-    // Update handleSendMessage to handle image messages
-    async function handleSendMessage(isImageMessage = false) {
-        if (isProcessing || (!isImageMessage && !messageInput.value.trim())) return;
-        
-        const userMessage = isImageMessage ? '' : messageInput.value.trim();
-        if (!isImageMessage) {
-            messageInput.value = '';
-        }
-        
-        if (!isImageMessage) {
-            appendMessage('user', userMessage);
-        }
-        
-        isProcessing = true;
-        if (loadingDiv) loadingDiv.style.display = 'block';
-        
-        try {
-            if (!isImageMessage) {
-                // Add user message to history
-                conversationHistory.push({
-                    role: "user",
-                    content: userMessage
-                });
-            }
-            
-            // Get AI response
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
-                    'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
-                    'X-Title': 'Tutor-Tron'
-                },
-                body: JSON.stringify({
-                    model: mode === 'codebreaker' ? 'google/gemini-pro' : 'anthropic/claude-3-sonnet-vision',
-                    messages: conversationHistory,
-                    temperature: 0.7,
-                    max_tokens: 400
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to get AI response');
-            }
-            
-            const data = await response.json();
-            const aiMessage = data.choices[0].message.content;
-            
-            // Add AI's response to history
-            conversationHistory.push({
-                role: "assistant",
-                content: aiMessage
-            });
-            
-            // Display the AI's response
-            appendMessage('ai', aiMessage);
-        } catch (error) {
-            console.error('Error getting AI response:', error);
-            showError('Failed to get response from tutor. Please try again.');
-        } finally {
-            isProcessing = false;
-            if (loadingDiv) loadingDiv.style.display = 'none';
-        }
-    }
+    */
 
     // Add message input handlers
     sendButton.addEventListener('click', handleSendMessage);
@@ -359,31 +577,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}-message`;
         
-        // Check for image URLs in the content
-        const imageUrlMatch = content.match(/https?:\/\/[^\s<>"]+?\.(?:jpg|jpeg|gif|png|webp)(?:\?[^\s<>"]+)?/gi);
-        
-        if (imageUrlMatch) {
-            // Remove image URLs from content
-            imageUrlMatch.forEach(url => {
-                content = content.replace(url, '');
-                // Create and append image element
-                const img = document.createElement('img');
-                img.src = url;
-                img.alt = 'Generated image';
-                img.className = 'generated-image';
-                // Add click handler for image expansion
-                img.onclick = (e) => {
-                    e.stopPropagation();
-                    modal.innerHTML = `<img src="${url}" alt="Expanded image">`;
-                    modal.style.display = 'flex';
-                };
-                messageDiv.appendChild(img);
-            });
-        }
-        
         // Format content with MathJax and code highlighting
         const formattedContent = formatMathContent(content);
-        messageDiv.innerHTML += formattedContent;
+        messageDiv.innerHTML = formattedContent;
         
         chatContainer.appendChild(messageDiv);
         chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -642,9 +838,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Get all messages
         const messages = chatContainer.getElementsByClassName('message');
         Array.from(messages).forEach(message => {
-            const role = message.classList.contains('user-message') ? 'You' : 'Tutor';
-            const content = message.textContent.trim();
-            chatText += `${role}: ${content}\n\n`;
+            // Determine if it's user or AI message
+            const isUser = message.classList.contains('user-message');
+            const role = isUser ? 'You' : 'Tutor';
+            
+            // Get message content, handling both text and images
+            let content = '';
+            if (message.querySelector('img')) {
+                content = '[Image]';
+            } else {
+                // Clean up the text content
+                content = message.textContent
+                    .replace(/Copy code/g, '') // Remove "Copy code" buttons
+                    .replace(/\n{3,}/g, '\n\n') // Replace multiple newlines with double newline
+                    .trim();
+            }
+            
+            // Add to chat text if there's content
+            if (content) {
+                chatText += `${role}: ${content}\n\n`;
+            }
         });
         
         try {
@@ -658,6 +871,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (error) {
             console.error('Copy failed:', error);
             fallbackCopyToClipboard(chatText);
+        }
+    }
+
+    // Fallback copy function
+    function fallbackCopyToClipboard(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        
+        try {
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showCopySuccess();
+        } catch (error) {
+            console.error('Fallback copy failed:', error);
+            document.body.removeChild(textArea);
+            showCopyError();
         }
     }
 
@@ -680,32 +914,72 @@ document.addEventListener("DOMContentLoaded", async () => {
         }, 2000);
     }
 
-    // Add toast notification styles
-    const toastStyle = document.createElement('style');
-    toastStyle.textContent = `
-        .copy-toast {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #4CAF50;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 14px;
-            z-index: 1000;
-            animation: toast-fade 2s ease;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    // Show copy error message
+    function showCopyError() {
+        showToast('Failed to copy chat. Please try again.', 'error');
+    }
+
+    // Add event listener for copy button
+    document.getElementById('copyButton').addEventListener('click', copyChat);
+
+    // Toast notification system
+    function showToast(message, type = 'success') {
+        // Remove existing toast if any
+        const existingToast = document.querySelector('.toast');
+        if (existingToast) {
+            document.body.removeChild(existingToast);
         }
         
-        @keyframes toast-fade {
-            0% { opacity: 0; transform: translate(-50%, 20px); }
-            10% { opacity: 1; transform: translate(-50%, 0); }
-            90% { opacity: 1; transform: translate(-50%, 0); }
-            100% { opacity: 0; transform: translate(-50%, -20px); }
+        // Create new toast
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        
+        // Add toast styles if not already added
+        if (!document.getElementById('toastStyles')) {
+            const style = document.createElement('style');
+            style.id = 'toastStyles';
+            style.textContent = `
+                .toast {
+                    position: fixed;
+                    bottom: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    color: white;
+                    font-size: 14px;
+                    z-index: 10000;
+                    animation: toast-fade 2s ease;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                }
+                
+                .toast-success {
+                    background-color: #4CAF50;
+                }
+                
+                .toast-error {
+                    background-color: #f44336;
+                }
+                
+                @keyframes toast-fade {
+                    0% { opacity: 0; transform: translate(-50%, 20px); }
+                    10% { opacity: 1; transform: translate(-50%, 0); }
+                    90% { opacity: 1; transform: translate(-50%, 0); }
+                    100% { opacity: 0; transform: translate(-50%, -20px); }
+                }
+            `;
+            document.head.appendChild(style);
         }
-    `;
-    document.head.appendChild(toastStyle);
+        
+        // Add to document and remove after animation
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            if (toast.parentNode) {
+                document.body.removeChild(toast);
+            }
+        }, 2000);
+    }
 
     // Event listeners for buttons
     document.addEventListener('DOMContentLoaded', () => {
@@ -730,242 +1004,31 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
-    // Available free models
-    const FREE_MODELS = [
-        "google/learnlm-1.5-pro-experimental:free",
-        "meta-llama/llama-3.1-405b-instruct:free",
-        "liquid/lfm-40b:free",
-        "google/gemini-exp-1114",
-        "meta-llama/llama-3.1-70b-instruct:free",
-        "google/gemma-2-9b-it:free",
-        "qwen/qwen-2-7b-instruct:free"
-    ];
-
-    const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
-
-    let currentModelIndex = 0;
-
-    // Function to get next model when one fails
-    function getNextModel() {
-        currentModelIndex = (currentModelIndex + 1) % FREE_MODELS.length;
-        return FREE_MODELS[currentModelIndex];
-    }
-
-    // Add image upload UI
-    function addImageUploadUI() {
-        const inputSection = document.querySelector('.input-section');
-        const uploadContainer = document.createElement('div');
-        uploadContainer.className = 'upload-container';
-        uploadContainer.innerHTML = `
-            <div class="image-upload">
-                <label for="imageUpload" class="upload-label">
-                    <span>📷</span> Add Image
-                </label>
-                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
-            </div>
-            <div id="imagePreview" class="image-preview"></div>
-        `;
-        
-        inputSection.insertBefore(uploadContainer, inputSection.firstChild);
-        
-        // Add image upload styles
-        const style = document.createElement('style');
-        style.textContent = `
-            .upload-container {
-                margin-bottom: 1rem;
-                display: flex;
-                flex-direction: column;
-                gap: 0.5rem;
-            }
-            
-            .image-upload {
-                display: flex;
-                align-items: center;
-            }
-            
-            .upload-label {
-                display: inline-flex;
-                align-items: center;
-                gap: 0.5rem;
-                padding: 0.5rem 1rem;
-                background-color: #f3f4f6;
-                border: 1px solid #d1d5db;
-                border-radius: 0.5rem;
-                cursor: pointer;
-                transition: background-color 0.2s;
-            }
-            
-            .upload-label:hover {
-                background-color: #e5e7eb;
-            }
-            
-            .image-preview {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.5rem;
-            }
-            
-            .preview-item {
-                position: relative;
-                width: 100px;
-                height: 100px;
-                border-radius: 0.5rem;
-                overflow: hidden;
-            }
-            
-            .preview-item img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-            
-            .remove-image {
-                position: absolute;
-                top: 0.25rem;
-                right: 0.25rem;
-                background: rgba(0, 0, 0, 0.5);
-                color: white;
-                border: none;
-                border-radius: 50%;
-                width: 24px;
-                height: 24px;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .remove-image:hover {
-                background: rgba(0, 0, 0, 0.7);
-            }
-        `;
-        document.head.appendChild(style);
-    }
-
-    // Handle image upload and preview
-    function handleImageUpload(file) {
-        const preview = document.getElementById('imagePreview');
-        const reader = new FileReader();
-        
-        reader.onload = function(e) {
-            const div = document.createElement('div');
-            div.className = 'preview-item';
-            div.innerHTML = `
-                <img src="${e.target.result}" alt="Uploaded image">
-                <button class="remove-image" onclick="this.parentElement.remove()">×</button>
-            `;
-            preview.appendChild(div);
-        };
-        
-        reader.readAsDataURL(file);
-    }
-
-    // Convert image to base64
-    async function imageToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
-    // Modified sendMessage function to handle images
-    async function sendMessage() {
-        if (isProcessing) return;
-        
-        const messageInput = document.getElementById('messageInput');
-        const message = messageInput.value.trim();
-        const imagePreview = document.getElementById('imagePreview');
-        const images = Array.from(imagePreview.querySelectorAll('img'));
-        
-        if (!message && images.length === 0) return;
-        
-        isProcessing = true;
-        showLoading();
-        
-        try {
-            // Add user message to chat
-            addMessage(message, 'user');
-            messageInput.value = '';
-            
-            // Prepare images if any
-            const imageBase64Array = await Promise.all(
-                images.map(async img => {
-                    const response = await fetch(img.src);
-                    const blob = await response.blob();
-                    return await imageToBase64(blob);
-                })
-            );
-            
-            // Clear image preview
-            imagePreview.innerHTML = '';
-            
-            let currentModel = FREE_MODELS[currentModelIndex];
-            let success = false;
-            let attempts = 0;
-            
-            while (!success && attempts < FREE_MODELS.length) {
-                try {
-                    const response = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message,
-                            images: imageBase64Array,
-                            subject: window.TUTOR_CONFIG.subject,
-                            prompt: window.TUTOR_CONFIG.prompt,
-                            mode: window.TUTOR_CONFIG.mode,
-                            model: imageBase64Array.length > 0 ? VISION_MODEL : currentModel
-                        })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    
-                    const data = await response.json();
-                    addMessage(data.response, 'ai');
-                    success = true;
-                    
-                } catch (error) {
-                    console.error(`Error with model ${currentModel}:`, error);
-                    currentModel = getNextModel();
-                    attempts++;
-                    
-                    if (attempts === FREE_MODELS.length) {
-                        throw new Error('All models failed');
-                    }
-                }
-            }
-            
-        } catch (error) {
-            console.error('Chat error:', error);
-            showError('Failed to get response. Please try again.');
-        } finally {
-            isProcessing = false;
-            hideLoading();
+    // Add styles for chat images
+    const imageStyles = document.createElement('style');
+    imageStyles.textContent = `
+        .chat-image {
+            max-width: 300px;
+            max-height: 300px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin: 10px 0;
         }
-    }
-
-    // Initialize image upload when page loads
-    document.addEventListener('DOMContentLoaded', () => {
-        // ... existing DOMContentLoaded code ...
         
-        // Add image upload UI
-        addImageUploadUI();
-        
-        // Add image upload handler
-        const imageUpload = document.getElementById('imageUpload');
-        if (imageUpload) {
-            imageUpload.addEventListener('change', (e) => {
-                if (e.target.files && e.target.files[0]) {
-                    handleImageUpload(e.target.files[0]);
-                    e.target.value = ''; // Reset input
-                }
-            });
+        .chat-image:hover {
+            transform: scale(1.05);
         }
-    });
+        
+        .user-message .chat-image {
+            float: right;
+            margin-left: 20px;
+        }
+        
+        .ai-message .chat-image {
+            float: left;
+            margin-right: 20px;
+        }
+    `;
+    document.head.appendChild(imageStyles);
 }); 

@@ -44,11 +44,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Add models list at the top
     const models = [
+        "meta-llama/llama-3.1-70b-instruct:free",
         "google/learnlm-1.5-pro-experimental:free",
         "meta-llama/llama-3.1-405b-instruct:free",
         "liquid/lfm-40b:free",
         "google/gemini-exp-1114",
-        "meta-llama/llama-3.1-70b-instruct:free",
         "google/gemma-2-9b-it:free",
         "qwen/qwen-2-7b-instruct:free"
     ];
@@ -113,27 +113,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         "  * Lead to unexpected insights\n" +
         "  * Support natural knowledge expansion\n\n" +
         "IMPORTANT: Limit to five sentences and return only the exploratory prompt.",
-        codebreaker: (language) => 
+        codebreaker: (language) =>
             "You are crafting a code debugging lesson prompt. Create a learning prompt for " + language + " that instructs the AI to:\n" +
             "1. Structure the lesson in three parts:\n" +
             "   - Brief concept introduction with core syntax and usage\n" +
             "   - Be concise and to the point\n" +
-            "   - Interactive comprehension checks using simple questions\n" +
             "   - Debugging game with intentionally broken code\n\n" +
             "2. For the debugging game section:\n" +
             "   - Present code snippets that appear correct but have subtle issues\n" +
-            "   - Ask students to identify what's wrong with the code\n" +
-            "   - Have students submit fixed versions\n" +
-            "   - Verify student solutions for correctness\n\n" +
+            "   - Ask students to identify what's wrong with the code and have them send the code again.\n" +
             "3. Include instructions for:\n" +
-            "- Stay relevant to the topic, even if the user's input is off-topic\n" +
-            "   - Progressive difficulty in the broken code examples\n" +
+            "  - Stay relevant to the topic, even if the user's input is off-topic\n" +
             "   - Providing appropriate hints when needed\n" +
-            "   - Explaining why each fix works\n\n" +
-            "   - Keeping the lesson concise and engaging\n\n" +
+            "   - Keeping the lesson concise but always include the full snippet and engaging\n\n" +
             "Format your response as a direct lesson instruction, similar to:\n" +
-            "'Introduce [concept] in [language], checking understanding with questions. Then present broken code examples for students to debug and fix. Verify their solutions.'\n\n" +
+            "'Introduce concepts in [language]. Then, present a broken code example for students to debug and fix.'\n\n" +
             "IMPORTANT: Return only the lesson prompt itself, without any additional commentary or explanation.",
+ 
         eliminator: 
             "You are crafting a knowledge-testing game prompt. Create a clear, elimination-style prompt that instructs the AI to:\n" +
             "1. Start by providing a comprehensive list of items related to the topic, where each item includes:\n" +

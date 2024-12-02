@@ -65,55 +65,167 @@ const FREE_MODELS = [
 
 const VISION_MODEL = "meta-llama/llama-3.2-90b-vision-instruct:free";
 
-// Keep track of which model we're using
+// At the top level with other global variables
+let messageHistory = [];
+let isProcessing = false;
 let currentModelIndex = 0;
+let chatContainer; // Add this to store the chat container reference
 
-// Get next model in sequence
-function getNextModel() {
-    const model = FREE_MODELS[currentModelIndex];
-    currentModelIndex = (currentModelIndex + 1) % FREE_MODELS.length;
-    return model;
+// Add loading state functions
+function showLoading() {
+    const loadingDiv = document.getElementById('loading');
+    if (loadingDiv) loadingDiv.style.display = 'block';
 }
 
-// Reset model index if we get a successful response
-function resetModelIndex() {
-    currentModelIndex = 0;
+function hideLoading() {
+    const loadingDiv = document.getElementById('loading');
+    if (loadingDiv) loadingDiv.style.display = 'none';
 }
 
-// Modify sendMessage function to use sequential models
-async function sendMessage() {
+// Add error display function
+function showError(message) {
+    const errorDiv = document.getElementById('errorContainer');
+    if (errorDiv) {
+        const errorMessage = errorDiv.querySelector('.error-message');
+        if (errorMessage) errorMessage.textContent = message;
+        errorDiv.style.display = 'block';
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    } else {
+        console.error(message);
+    }
+}
+
+// Move formatMathContent to global scope
+function formatMathContent(content) {
+    // Language aliases mapping
+    const languageAliases = {
+        'cpp': 'cpp',
+        'c++': 'cpp',
+        'Cpp': 'cpp',
+        'CPP': 'cpp',
+        'py': 'python',
+        'python': 'python',
+        'Python': 'python',
+        'js': 'javascript',
+        'javascript': 'javascript',
+        'JavaScript': 'javascript',
+        'java': 'java',
+        'Java': 'java',
+        'cs': 'csharp',
+        'csharp': 'csharp',
+        'c#': 'csharp',
+        'C#': 'csharp'
+    };
+
+    // First protect code blocks from other formatting
+    const codeBlocks = [];
+    content = content.replace(/```([\w+]+)?\s*([\s\S]*?)```/g, (match, lang, code) => {
+        const normalizedLang = lang ? languageAliases[lang.trim()] || lang.toLowerCase() : '';
+        codeBlocks.push({ language: normalizedLang, code: code.trim() });
+        return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+    });
+
+    // Handle LaTeX delimiters
+    content = content
+        .replace(/\\\((.*?)\\\)/g, '$ $1 $')
+        .replace(/\\\[(.*?)\\\]/g, '$$ $1 $$')
+        .replace(/\$\$([\s\S]*?)\$\$/g, (match, tex) => {
+            return `<div class="math-display">$$ ${tex.trim()} $$</div>`;
+        })
+        .replace(/\$(.*?)\$/g, (match, tex) => {
+            return `<span class="math-inline">$ ${tex.trim()} $</span>`;
+        });
+
+    // Format bullet points
+    content = content.replace(/^\* /gm, '• ');
+
+    // Format headers
+    content = content
+        .replace(/^# (.*?)$/gm, '<h1>$1</h1>')
+        .replace(/^## (.*?)$/gm, '<h2>$1</h2>')
+        .replace(/^### (.*?)$/gm, '<h3>$1</h3>');
+
+    // Handle general formatting
+    content = content
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    // Restore code blocks with syntax highlighting
+    content = content.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
+        const block = codeBlocks[parseInt(index)];
+        const formattedCode = block.code
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        return `<pre><code class="language-${block.language}">${formattedCode}</code></pre>`;
+    });
+
+    return content;
+}
+
+// Move appendMessage to global scope
+function appendMessage(type, content) {
+    if (!chatContainer) {
+        chatContainer = document.getElementById('chatContainer');
+    }
+    if (!chatContainer) {
+        console.error('Chat container not found');
+        return;
+    }
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}-message`;
+    
+    // Format content with MathJax and code highlighting
+    const formattedContent = formatMathContent(content);
+    messageDiv.innerHTML = formattedContent;
+    
+    chatContainer.appendChild(messageDiv);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    
+    // Render MathJax if ready
+    if (window.MathJax) {
+        window.MathJax.typesetPromise([messageDiv]).catch(err => 
+            console.error('MathJax error:', err)
+        );
+    }
+    
+    // Apply code highlighting
+    messageDiv.querySelectorAll('pre code').forEach((block) => {
+        if (window.hljs) {
+            window.hljs.highlightElement(block);
+        }
+    });
+}
+
+// Add this after the appendMessage function and before the DOMContentLoaded event listener
+async function handleSendMessage() {
     if (isProcessing) return;
     
     const messageInput = document.getElementById('messageInput');
     const message = messageInput.value.trim();
-    const imageUpload = document.getElementById('imageUpload');
-    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
     
-    if (!message && (!imageUpload || !imageUpload.files[0])) return;
+    if (!message) return;
     
     isProcessing = true;
     showLoading();
+
+    // Display user message immediately
+    appendMessage('user', message);
     
     try {
-        let imageBase64 = null;
-        if (imageUpload && imageUpload.files[0]) {
-            imageBase64 = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result.split(',')[1]);
-                reader.readAsDataURL(imageUpload.files[0]);
-            });
-        }
-
         // Try each model until one works
-        let response;
-        let data;
         let success = false;
-
+        let data;
+        
         while (!success && currentModelIndex < FREE_MODELS.length) {
             try {
-                const model = imageBase64 ? VISION_MODEL : FREE_MODELS[currentModelIndex];
+                const model = FREE_MODELS[currentModelIndex];
+                console.log('Trying model:', model);
                 
-                response = await fetch('/api/chat', {
+                const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -124,47 +236,137 @@ async function sendMessage() {
                         prompt: window.TUTOR_CONFIG.prompt,
                         mode: window.TUTOR_CONFIG.mode,
                         model,
-                        image: imageBase64
+                        messageHistory
                     })
                 });
 
-                if (response.ok) {
-                    data = await response.json();
-                    success = true;
-                    resetModelIndex(); // Reset to first model on success
-                } else {
-                    currentModelIndex++; // Try next model
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('API Error:', response.status, errorData);
+                    throw new Error(`API returned ${response.status}`);
                 }
+
+                data = await response.json();
+                if (!data || !data.response) {
+                    console.error('Invalid API response:', data);
+                    throw new Error('Invalid API response format');
+                }
+
+                // Update message history with the new response
+                messageHistory = data.messageHistory || messageHistory;
+                
+                success = true;
+                currentModelIndex = 0; // Reset on success
+                
             } catch (error) {
                 console.error(`Error with model ${FREE_MODELS[currentModelIndex]}:`, error);
-                currentModelIndex++; // Try next model
+                currentModelIndex++;
+                
+                if (currentModelIndex >= FREE_MODELS.length) {
+                    throw new Error('All models failed');
+                }
             }
         }
 
         if (!success) {
-            throw new Error('All models failed to respond');
+            throw new Error('Failed to get response from any model');
         }
 
-        appendMessage(message, 'user');
-        if (imageBase64) {
-            appendImageMessage(imageUpload.files[0]);
-        }
-        appendMessage(data.response, 'ai');
+        // Display AI response
+        appendMessage('ai', data.response);
         
-        // Clear input and image
+        // Clear input
         messageInput.value = '';
-        if (imageUpload) {
-            imageUpload.value = '';
-            imagePreviewContainer.style.display = 'none';
-        }
         
     } catch (error) {
-        console.error('Error:', error);
-        showError('Failed to send message. Please try again.');
-        currentModelIndex = 0; // Reset index after all models fail
+        console.error('Error getting AI response:', error);
+        showError('Failed to get response. Please try again.');
+        currentModelIndex = 0; // Reset index after all attempts fail
     } finally {
         isProcessing = false;
         hideLoading();
+    }
+}
+
+// Add at the top with other constants
+const RATE_LIMIT_RETRY_DELAY = 2000; // 2 seconds
+const MAX_RETRIES = 3;
+
+// Update the initial API call in DOMContentLoaded
+async function makeInitialApiCall(apiKeys, systemMessage, retryCount = 0) {
+    try {
+        const model = FREE_MODELS[currentModelIndex];
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
+                'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
+                'X-Title': 'Tutor-Tron'
+            },
+            body: JSON.stringify({
+                model,
+                messages: [systemMessage],
+                temperature: 0.7,
+                max_tokens: 400
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            if (response.status === 429) { // Rate limit error
+                if (retryCount < MAX_RETRIES) {
+                    console.log(`Rate limited, retrying in ${RATE_LIMIT_RETRY_DELAY}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY));
+                    return makeInitialApiCall(apiKeys, systemMessage, retryCount + 1);
+                }
+                // Try next model if available
+                currentModelIndex = (currentModelIndex + 1) % FREE_MODELS.length;
+                if (currentModelIndex !== 0) {
+                    return makeInitialApiCall(apiKeys, systemMessage, 0);
+                }
+            }
+            throw new Error(`API Error: ${JSON.stringify(errorData)}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('API call error:', error);
+        throw error;
+    }
+}
+
+// Update the handleSendMessage function's API call part
+async function tryApiCall(message, model, retryCount = 0) {
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message,
+                subject: window.TUTOR_CONFIG.subject,
+                prompt: window.TUTOR_CONFIG.prompt,
+                mode: window.TUTOR_CONFIG.mode,
+                model,
+                messageHistory
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            if (response.status === 429 && retryCount < MAX_RETRIES) {
+                console.log(`Rate limited, retrying in ${RATE_LIMIT_RETRY_DELAY}ms...`);
+                await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY));
+                return tryApiCall(message, model, retryCount + 1);
+            }
+            throw new Error(`API returned ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        throw error;
     }
 }
 
@@ -172,18 +374,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     await window.envLoaded;
     
     // Get DOM elements
-    const chatContainer = document.getElementById('chatContainer');
+    chatContainer = document.getElementById('chatContainer');
     const messageInput = document.getElementById('messageInput');
     const sendButton = document.getElementById('sendMessage');
     const loadingDiv = document.getElementById('loading');
     
-    // State variables
-    const conversationHistory = [];
+    // State variables (remove isProcessing from here since it's now global)
     let currentImage = null;
     let isSpeaking = false;
     let currentSpeech = null;
     let consoleErrors = [];
-    let isProcessing = false;
     let mathJaxReady = false;
     let currentAudio = null;
 
@@ -221,35 +421,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 role: "system",
                 content: `You are a tutor helping a student with ${subject}. ${prompt}`
             };
-            conversationHistory.push(systemMessage);
+            messageHistory.push(systemMessage);
 
-            // Initial API call
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKeys.OPENROUTER_API_KEY}`,
-                    'HTTP-Referer': 'https://tutortron.dizon-dzn12.workers.dev/',
-                    'X-Title': 'Tutor-Tron'
-                },
-                body: JSON.stringify({
-                    model: FREE_MODELS[currentModelIndex], // Always use first model for initial message
-                    messages: conversationHistory,
-                    temperature: 0.7,
-                    max_tokens: 400
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('API Error Response:', errorData);
-                throw new Error(`API response not ok: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
-            }
-
-            const data = await response.json();
+            const data = await makeInitialApiCall(apiKeys, systemMessage);
             console.log('API Response:', data);
 
-            // Handle different response formats
             let aiMessage;
             if (data.error) {
                 console.error('API returned error:', data.error);
@@ -264,26 +440,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 } else if (data.choices[0].content) {
                     aiMessage = data.choices[0].content;
                 } else {
-                    console.error('Unexpected response format:', data);
                     throw new Error('Unexpected response format from AI');
                 }
             } else {
-                console.error('No choices in response:', data);
                 throw new Error('No response content from AI');
             }
 
-            // Add AI's response to conversation history
-            conversationHistory.push({
-                role: "assistant",
-                content: aiMessage
-            });
-
-            // Display the AI's response
             appendMessage('ai', aiMessage);
         } catch (error) {
             console.error('Full error details:', error);
             showError(`Failed to get response from tutor: ${error.message}`);
-            throw error;
         } finally {
             isProcessing = false;
             if (loadingDiv) loadingDiv.style.display = 'none';
@@ -335,7 +501,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 appendMessage('user', base64Image);
 
                 // Add to conversation history
-                conversationHistory.push({
+                messageHistory.push({
                     role: "user",
                     content: [
                         {
@@ -362,88 +528,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
     */
-
-    // Update handleSendMessage to handle image messages
-    async function handleSendMessage() {
-        if (isProcessing) return;
-        
-        const messageInput = document.getElementById('messageInput');
-        const message = messageInput.value.trim();
-        
-        if (!message) return;
-        
-        isProcessing = true;
-        showLoading();
-        
-        try {
-            // Try each model until one works
-            let success = false;
-            let data;
-            
-            while (!success && currentModelIndex < FREE_MODELS.length) {
-                try {
-                    const model = FREE_MODELS[currentModelIndex];
-                    console.log('Trying model:', model); // Debug log
-                    
-                    const response = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message,
-                            subject: window.TUTOR_CONFIG.subject,
-                            prompt: window.TUTOR_CONFIG.prompt,
-                            mode: window.TUTOR_CONFIG.mode,
-                            model
-                        })
-                    });
-
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}));
-                        console.error('API Error:', response.status, errorData); // Debug log
-                        throw new Error(`API returned ${response.status}`);
-                    }
-
-                    data = await response.json();
-                    if (!data || !data.response) {
-                        console.error('Invalid API response:', data); // Debug log
-                        throw new Error('Invalid API response format');
-                    }
-
-                    success = true;
-                    currentModelIndex = 0; // Reset on success
-                    
-                } catch (error) {
-                    console.error(`Error with model ${FREE_MODELS[currentModelIndex]}:`, error);
-                    currentModelIndex++;
-                    
-                    if (currentModelIndex >= FREE_MODELS.length) {
-                        throw new Error('All models failed');
-                    }
-                }
-            }
-
-            if (!success) {
-                throw new Error('Failed to get response from any model');
-            }
-
-            // Display messages
-            appendMessage(message, 'user');
-            appendMessage(data.response, 'ai');
-            
-            // Clear input
-            messageInput.value = '';
-            
-        } catch (error) {
-            console.error('Error getting AI response:', error);
-            showError('Failed to get response. Please try again.');
-            currentModelIndex = 0; // Reset index after all attempts fail
-        } finally {
-            isProcessing = false;
-            hideLoading();
-        }
-    }
 
     // Add message input handlers
     sendButton.addEventListener('click', handleSendMessage);
@@ -493,31 +577,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}-message`;
         
-        // Check for image URLs in the content
-        const imageUrlMatch = content.match(/https?:\/\/[^\s<>"]+?\.(?:jpg|jpeg|gif|png|webp)(?:\?[^\s<>"]+)?/gi);
-        
-        if (imageUrlMatch) {
-            // Remove image URLs from content
-            imageUrlMatch.forEach(url => {
-                content = content.replace(url, '');
-                // Create and append image element
-                const img = document.createElement('img');
-                img.src = url;
-                img.alt = 'Generated image';
-                img.className = 'generated-image';
-                // Add click handler for image expansion
-                img.onclick = (e) => {
-                    e.stopPropagation();
-                    modal.innerHTML = `<img src="${url}" alt="Expanded image">`;
-                    modal.style.display = 'flex';
-                };
-                messageDiv.appendChild(img);
-            });
-        }
-        
         // Format content with MathJax and code highlighting
         const formattedContent = formatMathContent(content);
-        messageDiv.innerHTML += formattedContent;
+        messageDiv.innerHTML = formattedContent;
         
         chatContainer.appendChild(messageDiv);
         chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -941,17 +1003,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             copyButton.addEventListener('click', copyChat);
         }
     });
-
-    // Loading state functions
-    function showLoading() {
-        const loadingDiv = document.getElementById('loading');
-        if (loadingDiv) loadingDiv.style.display = 'block';
-    }
-
-    function hideLoading() {
-        const loadingDiv = document.getElementById('loading');
-        if (loadingDiv) loadingDiv.style.display = 'none';
-    }
 
     // Add styles for chat images
     const imageStyles = document.createElement('style');
