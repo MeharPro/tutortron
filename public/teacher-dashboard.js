@@ -75,7 +75,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         "  * Challenge assumptions\n\n" +
         "IMPORTANT: Return only the teaching prompt, without any meta-commentary or additional responses.",
 
-        comparator: 
+        comparitor: 
         "You are crafting a comparative analysis prompt for an AI model. Create a structured teaching prompt that:\n" +
         "1. Establishes clear evaluation criteria\n" +
         "2. Uses parallel structure when comparing elements\n" +
@@ -210,7 +210,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Update the prompt refinement handler
-    ['investigator', 'comparator', 'quest', 'codebreaker', 'eliminator'].forEach(mode => {
+    ['investigator', 'comparitor', 'quest', 'codebreaker', 'eliminator'].forEach(mode => {
         const promptInput = document.getElementById(`${mode}Prompt`);
         const refinedPromptDiv = document.getElementById(`${mode}RefinedPrompt`);
         
@@ -273,7 +273,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Add click handlers for each mode's create button
-    ['investigator', 'comparator', 'quest', 'codebreaker', 'eliminator'].forEach(mode => {
+    ['investigator', 'comparitor', 'quest', 'codebreaker', 'eliminator'].forEach(mode => {
         document.getElementById(`create${mode.charAt(0).toUpperCase() + mode.slice(1)}Btn`)
             .addEventListener('click', async () => {
                 const subject = document.getElementById(`${mode}Subject`).value.trim();
@@ -325,7 +325,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const modeInfo = {
         investigator: "Allows the student to investigate a topic in depth.",
         quest: "Allows the student to go above and beyond the topic and create connections.",
-        comparator: "Allows the student to understand key similarities and differences between complex topics.",
+        comparitor: "Allows the student to understand key similarities and differences between complex topics.",
         codebreaker: "Applies to learning related to coding, gives the student broken code to debug.",
         eliminator: "A game to understand key facts about multiple topics."
     };
