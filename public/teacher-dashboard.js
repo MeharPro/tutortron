@@ -44,7 +44,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Add models list at the top
     const models = [
-        "openai/gpt-4o-2024-11-20",
         "meta-llama/llama-3.1-405b-instruct:free",
         "google/learnlm-1.5-pro-experimental:free",
         "meta-llama/llama-3.1-70b-instruct:free",

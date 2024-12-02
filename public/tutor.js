@@ -53,13 +53,13 @@ document.head.appendChild(highlightCSS);
 
 // Define available models in order of preference
 const FREE_MODELS = [
-    "meta-llama/llama-3.2-90b-vision-instruct:free",
+    "google/gemini-flash-1.5-8b-exp",
     "google/learnlm-1.5-pro-experimental:free",
+    "google/gemini-exp-1114",
+    "google/gemma-2-9b-it:free",
     "meta-llama/llama-3.1-405b-instruct:free",
     "liquid/lfm-40b:free",
-    "google/gemini-exp-1114",
     "meta-llama/llama-3.1-70b-instruct:free",
-    "google/gemma-2-9b-it:free",
     "qwen/qwen-2-7b-instruct:free"
 ];
 
