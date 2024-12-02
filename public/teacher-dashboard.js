@@ -114,15 +114,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         "  * Support natural knowledge expansion\n\n" +
         "IMPORTANT: Limit to five sentences and return only the exploratory prompt.",
         codebreaker:(language) =>
-            "You are crafting a code debugging lesson prompt. Create a learning prompt for " + language + " that instructs the AI to:\n" +
+            "You are crafting a code lesson prompt. Create a learning prompt for " + language + " that instructs the AI to:\n" +
             "   - Brief introduction with terminology and functional example code.\n" +
             "   - Be concise.\n" +
             "   - Ask if the user wants to play Debugging game\n" +
             "   - Ask if they're comfortable with the topic.\n" +
-            "   - If they do, write 'Yes', and then begin the game.\n" +
+            "   - If they do, write 'Yes', and then begin the game. Wait for user to say they understand.\n" +
             "Only begin with this if the user says 'Yes'.\n" +
             "   - Present code snippets that have subtle issues.\n" +
-            "   - Ask students to identify what's wrong with the code and have them send the corrected code again.\n" +
+            "   - Ask user to identify what's wrong with the code and have them send the corrected code again.\n" +
             "3. Include instructions for:\n" +
             "   - Staying relevant to the topic, even if the user's input is off-topic.\n" +
             "   - Ask to provide appropriate hints when needed.\n" +
