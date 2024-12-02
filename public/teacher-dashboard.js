@@ -113,22 +113,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         "  * Lead to unexpected insights\n" +
         "  * Support natural knowledge expansion\n\n" +
         "IMPORTANT: Limit to five sentences and return only the exploratory prompt.",
-        codebreaker:(language) =>
-            "You are crafting a code lesson prompt. Create a learning prompt for " + language + " that instructs the AI to:\n" +
-            "   - Brief introduction with terminology and functional example code.\n" +
-            "   - Be concise.\n" +
-            "   - Ask if the user wants to play Debugging game\n" +
-            "   - Ask if they're comfortable with the topic.\n" +
-            "   - If they do, write 'Yes', and then begin the game. Wait for user to say they understand.\n" +
-            "Only begin with this if the user says 'Yes'.\n" +
-            "   - Present code snippets that have subtle issues.\n" +
-            "   - Ask user to identify what's wrong with the code and have them send the corrected code again.\n" +
+        codebreaker: (language) => "Introduce [concept] in " + language + ". Use short sentences to explain. Provide an example code. Ask if the student understands before moving on.\n\n" + 
+        "1. Structure the lesson in three parts:\n" + 
+        " - Briefly introduce the concept with short, clear sentences.\n" + 
+            " - Show a simple, working example code.\n" + 
+            " - After each explanation, ask a confirmation question like 'Do you understand this part?'\n" + 
+            " - Use simple questions to check comprehension.\n" + 
+            " - Present a debugging game with broken code.\n\n" + 
+            "2. For the debugging game:\n" + 
+            " - Show snippets that look correct but have issues.\n" + 
+            " - Ask students to find the problems.\n" + 
+            " - Have them submit fixed versions.\n" + 
+            " - Verify their solutions and provide feedback.\n\n" + 
             "3. Include instructions for:\n" +
-            "   - Staying relevant to the topic, even if the user's input is off-topic.\n" +
-            "   - Ask to provide appropriate hints when needed.\n" +
-            "   - Saying 'Time to play the debugging game!' before starting the game section.\n" +
-            "IMPORTANT: Return only the lesson prompt itself, without any additional commentary or explanation.\n",
- 
+            "- Staying on topic, even if the student strays.\n" + 
+            " - Increasing difficulty in broken code examples.\n" + 
+            " - Offering hints when needed.\n" + 
+            " - Explaining why each fix works clearly.\n\n" + 
+            " - Keeping the lesson concise and engaging.",
  
         eliminator: 
             "You are crafting a knowledge-testing game prompt. Create a clear, elimination-style prompt that instructs the AI to:\n" +
