@@ -125,10 +125,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             "3. Include instructions for:\n" +
             "  - Stay relevant to the topic, even if the user's input is off-topic\n" +
             "   - Providing appropriate hints when needed\n" +
+            "   - Make it say 'Time to play the debugging game!'\n" +
             "   - Keeping the lesson concise but always include the full snippet and engaging\n\n" +
             "Format your response as a direct lesson instruction, similar to:\n" +
             "'Introduce concepts in [language]. Then, present a broken code example for students to debug and fix.'\n\n" +
             "IMPORTANT: Return only the lesson prompt itself, without any additional commentary or explanation.",
+ 
  
         eliminator: 
             "You are crafting a knowledge-testing game prompt. Create a clear, elimination-style prompt that instructs the AI to:\n" +
