@@ -53,7 +53,6 @@ document.head.appendChild(highlightCSS);
 
 // Define available models in order of preference
 const FREE_MODELS = [
-    "google/gemini-flash-1.5-8b-exp",
     "google/learnlm-1.5-pro-experimental:free",
     "google/gemini-exp-1114",
     "google/gemma-2-9b-it:free",
