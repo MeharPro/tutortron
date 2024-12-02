@@ -44,6 +44,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Add models list at the top
     const models = [
+        "openai/gpt-4o-2024-11-20",
         "meta-llama/llama-3.1-405b-instruct:free",
         "google/learnlm-1.5-pro-experimental:free",
         "meta-llama/llama-3.1-70b-instruct:free",
@@ -120,12 +121,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             " - After each explanation, ask a confirmation question like 'Do you understand this part?'\n" + 
             " - Use simple questions to check comprehension.\n" + 
             " - Present a debugging game with broken code.\n\n" + 
-            "2. For the debugging game:\n" + 
+        "2. For the debugging game:\n" + 
             " - Show snippets that look correct but have issues.\n" + 
             " - Ask students to find the problems.\n" + 
             " - Have them submit fixed versions.\n" + 
             " - Verify their solutions and provide feedback.\n\n" + 
-            "3. Include instructions for:\n" +
+        "3. Include instructions for:\n" +
             "- Staying on topic, even if the student strays.\n" + 
             " - Increasing difficulty in broken code examples.\n" + 
             " - Offering hints when needed.\n" + 
