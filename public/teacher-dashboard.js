@@ -118,20 +118,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             "1. Structure the lesson in three parts:\n" +
             "   - Brief concept introduction with core syntax and usage.\n" +
             "   - Be concise and to the point.\n" +
-            "   - Debugging game with intentionally broken code.\n\n" +
+            "   - Debugging game with intentionally broken code.\n" +
+            "   - Then, write Do you understand?, after each little step, and stop writing, and then only begin the rest of the lesson after the student says they understand. \n" +
             "2. For the debugging game section:\n" +
             "   - Present code snippets that appear correct but have subtle issues.\n" +
-            "   - Ask students to identify what's wrong with the code and have them send the corrected code again.\n\n" +
+            "   - Ask students to identify what's wrong with the code and have them send the corrected code again.\n" +
+            "   - Then, write Do you understand?, after each little step, and stop writing, and then only begin the rest of the lesson after the student says they understand. \n" +
             "3. Include instructions for:\n" +
             "   - Staying relevant to the topic, even if the user's input is off-topic.\n" +
             "   - Providing appropriate hints when needed.\n" +
             "   - Saying 'Time to play the debugging game!' before starting the game section.\n" +
-            "   - Keeping the lesson concise but always including the full snippet and ensuring it is engaging.\n\n" +
+            "   - Keeping the lesson concise but always including the full snippet and ensuring it is engaging.\n" +
             "4. Format the final lesson as direct instructions, similar to:\n" +
-            "'Introduce concepts in [language]. Then, present a broken code example for students to debug and fix.'\n\n" +
-            "IMPORTANT: Return only the lesson prompt itself, without any additional commentary or explanation.\n\n" +
-            "Do you have any additional requests for how the lesson should be structured or formatted? (Yes/No)",
-        
+            "'Introduce concepts in " + language + ". Then, present a broken code example for students to debug and fix.'\n" +
+            "IMPORTANT: Return only the lesson prompt itself, without any additional commentary or explanation.\n",
  
  
         eliminator: 
