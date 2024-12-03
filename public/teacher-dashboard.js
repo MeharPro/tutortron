@@ -113,33 +113,37 @@ document.addEventListener("DOMContentLoaded", async () => {
         "  * Lead to unexpected insights\n" +
         "  * Support natural knowledge expansion\n\n" +
         "IMPORTANT: Limit to five sentences and return only the exploratory prompt.",
-        codebreaker: (language) => "You are a prompt writer. Create a detailed prompt that another AI will use to teach [concept] in " + language + ". Structure the prompt as follows:\n\n" +
-        "1. Instruct the teaching AI to:\n" +
-        " - Present one concept at a time\n" +
-        " - Wait for student confirmation before proceeding\n" +
-        " - Use simple examples with clear comments\n" +
-        " - Never dump multiple concepts at once\n\n" +
-        "2. Tell the teaching AI to structure each concept as:\n" +
-        " - Brief definition\n" +
-        " - Single syntax example\n" +
-        " - One practice exercise\n" +
-        " - Wait for student solution\n\n" +
-        "3. Guide the teaching AI on debugging lessons:\n" +
-        " - Show one broken code snippet at a time\n" +
-        " - Start with basic errors\n" +
-        " - Wait for student's attempt\n" +
-        " - Provide hints if needed\n\n" +
-        "4. Direct the teaching AI's interaction:\n" +
-        " - Require student confirmation between steps\n" +
-        " - Stay on current topic until understood\n" +
-        " - Provide feedback on student solutions\n" +
-        " - Only proceed when student is ready\n\n" +
-        "5. Tell the teaching AI to use these exact phrases:\n" +
-        " - 'Shall we look at the code?'\n" +
-        " - 'Try solving this example'\n" +
-        " - 'Would you like a hint?'\n" +
-        " - 'Ready for the next part?'\n\n" +
-        "Remember: You are writing instructions FOR another AI to teach. Do not execute the lesson yourself.",
+        codebreaker: (language) => "You are a prompt writer. Create instructions for a teaching AI that will teach [concept] in " + language + ". Your prompt should make the teaching AI:\n\n" +
+    "1. Start with proper setup:\n" +
+    " - Introduce itself as an interactive programming tutor\n" +
+    " - Encourage questions and interruptions\n" +
+    " - Present only one concept per interaction\n\n" +
+    "2. Structure each concept introduction as:\n" +
+    " - One-sentence definition\n" +
+    " - Real-world use case example\n" +
+    " - Basic syntax explanation\n" +
+    " - Wait for student confirmation\n\n" +
+    "3. Guide example presentation:\n" +
+    " - Show ONE simple working code example\n" +
+    " - Explain each part of the code separately\n" +
+    " - Point out common pitfalls\n" +
+    " - Ask specific questions about the code\n\n" +
+    "4. Create interactive exercises:\n" +
+    " - Give ONE clear modification task\n" +
+    " - Specify exactly what changes are needed\n" +
+    " - Ask student to explain their changes\n" +
+    " - Guide reflection on differences\n\n" +
+    "5. Teach debugging through:\n" +
+    " - One problem at a time\n" +
+    " - Progressively harder challenges\n" +
+    " - Specific questions about errors\n" +
+    " - Guided problem-solving steps\n\n" +
+    "The teaching AI should:\n" +
+    " - Stop after each major point\n" +
+    " - Ask specific, not general questions\n" +
+    " - Never show solutions before student attempts\n" +
+    " - Analyze student solutions when provided\n" +
+    "Remember: Write instructions for the teaching AI, don't create the lesson content yourself.",
  
         eliminator: 
             "You are crafting a knowledge-testing game prompt. Create a clear, elimination-style prompt that instructs the AI to:\n" +
@@ -753,7 +757,7 @@ async function loadLinks() {
         const linksList = document.getElementById('linksList');
         linksList.innerHTML = '';
 
-        // Add links in sorted order
+        // Add links in sorted order (newest first)
         links.forEach(link => {
             const linkCard = document.createElement('div');
             linkCard.className = `link-card ${link.mode.toLowerCase()}`;
@@ -768,9 +772,11 @@ async function loadLinks() {
                     <button class="delete-link-btn" onclick="deleteLink('${link.id}')">Delete Link</button>
                 </div>
             `;
+            // Append each link to maintain the sorted order
             linksList.appendChild(linkCard);
         });
     } catch (error) {
         console.error('Error loading links:', error);
+        showMessage('Failed to load links', true);
     }
 }
