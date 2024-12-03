@@ -308,7 +308,7 @@ async function makeInitialApiCall(apiKeys, systemMessage, retryCount = 0) {
                 model,
                 messages: [systemMessage],
                 temperature: 0.7,
-                max_tokens: 600
+                max_tokens: 1024
             })
         });
 
