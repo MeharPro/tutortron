@@ -216,13 +216,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 promptTemplate = systemPrompt[mode];
             }
 
-            console.log(`[${mode.toUpperCase()}] Original Prompt:`, prompt);
-            console.log(`[${mode.toUpperCase()}] System Template:`, promptTemplate);
-
-            const refinedPrompt = await tryModels(promptTemplate, prompt);
-            console.log(`[${mode.toUpperCase()}] Refined Prompt:`, refinedPrompt);
-
-            return refinedPrompt;
+            return await tryModels(promptTemplate, prompt);
         } catch (error) {
             console.error('All models failed:', error);
             return prompt; // Return original prompt if all models fail
@@ -313,19 +307,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 button.disabled = true;
 
                 try {
-                    // Log the original prompt
-                    console.log(`[${mode.toUpperCase()}] Original Prompt:`, prompt);
-
                     // Refine the prompt unless custom prompt is checked
                     if (!useCustomPrompt) {
-                        const systemTemplate = mode === 'codebreaker' 
-                            ? systemPrompt.codebreaker(document.getElementById('codebreakerLanguage').value)
-                            : systemPrompt[mode];
-                        console.log(`[${mode.toUpperCase()}] System Template:`, systemTemplate);
                         prompt = await refinePrompt(mode, prompt);
-                        console.log(`[${mode.toUpperCase()}] Refined Prompt:`, prompt);
-                    } else {
-                        console.log(`[${mode.toUpperCase()}] Using Custom Prompt:`, prompt);
                     }
 
                     const success = await createModeLink(mode, subject, prompt);
