@@ -78,7 +78,7 @@ router.post('/api/auth/register', async (request, env) => {
         const { name, email, password, school, accessCode } = await request.json();
 
         // Validate access code
-        if (accessCode !== 'TEACH2024') {
+        if (accessCode !== 'TEACH2025') {
             return new Response(JSON.stringify({ error: 'Invalid access code' }), {
                 status: 403,
                 headers: { 'Content-Type': 'application/json' }
