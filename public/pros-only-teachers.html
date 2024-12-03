@@ -282,6 +282,52 @@
             background: white;
             color: var(--primary-color);
         }
+
+        /* Add console output styles */
+        .console-output {
+            background: #1a1a1a;
+            color: #00ff00;
+            font-family: monospace;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 2rem;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .console-output .log-entry {
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid #333;
+            padding-bottom: 0.5rem;
+        }
+
+        .console-output .log-entry:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .console-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .console-header button {
+            background: #333;
+            color: #fff;
+            padding: 0.25rem 0.5rem;
+            border: none;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            width: auto;
+        }
+
+        .console-header button:hover {
+            background: #444;
+        }
     </style>
 </head>
 <body>
@@ -387,6 +433,15 @@
             <div id="linksList">
                 <!-- Links will be dynamically added here -->
             </div>
+        </div>
+
+        <!-- Add console output section -->
+        <div class="console-output">
+            <div class="console-header">
+                <h3 style="color: #fff; margin: 0;">Prompt Console</h3>
+                <button onclick="clearConsole()">Clear Console</button>
+            </div>
+            <div id="consoleOutput"></div>
         </div>
     </div>
 

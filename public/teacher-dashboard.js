@@ -205,6 +205,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // Add console logging functions
+    function logToConsole(message, type = '') {
+        const consoleOutput = document.getElementById('consoleOutput');
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        consoleOutput.appendChild(entry);
+        consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        console.log(message); // Also log to browser console
+    }
+
+    function clearConsole() {
+        const consoleOutput = document.getElementById('consoleOutput');
+        consoleOutput.innerHTML = '';
+    }
+
     // Update the refinePrompt function
     async function refinePrompt(mode, prompt) {
         try {
@@ -216,9 +232,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 promptTemplate = systemPrompt[mode];
             }
 
-            return await tryModels(promptTemplate, prompt);
+            logToConsole(`[${mode.toUpperCase()}] Original Prompt: ${prompt}`);
+            logToConsole(`[${mode.toUpperCase()}] System Template: ${promptTemplate}`);
+
+            const refinedPrompt = await tryModels(promptTemplate, prompt);
+            logToConsole(`[${mode.toUpperCase()}] Refined Prompt: ${refinedPrompt}`);
+
+            return refinedPrompt;
         } catch (error) {
             console.error('All models failed:', error);
+            logToConsole(`[ERROR] Failed to refine prompt: ${error.message}`);
             return prompt; // Return original prompt if all models fail
         }
     }
@@ -286,7 +309,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // Add click handlers for each mode's create button
+    // Update the click handlers for create buttons
     ['investigator', 'comparitor', 'quest', 'codebreaker', 'eliminator'].forEach(mode => {
         document.getElementById(`create${mode.charAt(0).toUpperCase() + mode.slice(1)}Btn`)
             .addEventListener('click', async () => {
@@ -307,9 +330,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                 button.disabled = true;
 
                 try {
-                    // Refine the prompt unless custom prompt is checked
+                    logToConsole(`[${mode.toUpperCase()}] Creating new ${mode} prompt for subject: ${subject}`);
+                    logToConsole(`[${mode.toUpperCase()}] Original Prompt: ${prompt}`);
+
                     if (!useCustomPrompt) {
+                        const systemTemplate = mode === 'codebreaker' 
+                            ? systemPrompt.codebreaker(document.getElementById('codebreakerLanguage').value)
+                            : systemPrompt[mode];
+                        logToConsole(`[${mode.toUpperCase()}] System Template: ${systemTemplate}`);
                         prompt = await refinePrompt(mode, prompt);
+                        logToConsole(`[${mode.toUpperCase()}] Refined Prompt: ${prompt}`);
+                    } else {
+                        logToConsole(`[${mode.toUpperCase()}] Using Custom Prompt: ${prompt}`);
                     }
 
                     const success = await createModeLink(mode, subject, prompt);
@@ -318,12 +350,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                         document.getElementById(`${mode}Subject`).value = '';
                         document.getElementById(`${mode}Custom`).checked = false;
                         showMessage(`${mode.charAt(0).toUpperCase() + mode.slice(1)} link created successfully!`);
+                        logToConsole(`[${mode.toUpperCase()}] Link created successfully`);
                     } else {
                         showMessage('Failed to create link', true);
+                        logToConsole(`[ERROR] Failed to create ${mode} link`);
                     }
                 } catch (error) {
                     console.error('Error:', error);
                     showMessage('Failed to process prompt', true);
+                    logToConsole(`[ERROR] ${error.message}`);
                 } finally {
                     // Restore button state
                     button.textContent = originalText;
