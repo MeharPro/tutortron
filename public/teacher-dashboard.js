@@ -216,7 +216,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 promptTemplate = systemPrompt[mode];
             }
 
-            return await tryModels(promptTemplate, prompt);
+            console.log(`[${mode.toUpperCase()}] Original Prompt:`, prompt);
+            console.log(`[${mode.toUpperCase()}] System Template:`, promptTemplate);
+
+            const refinedPrompt = await tryModels(promptTemplate, prompt);
+            console.log(`[${mode.toUpperCase()}] Refined Prompt:`, refinedPrompt);
+
+            return refinedPrompt;
         } catch (error) {
             console.error('All models failed:', error);
             return prompt; // Return original prompt if all models fail
