@@ -44,9 +44,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Add models list at the top
     const models = [
-        "meta-llama/llama-3.1-70b-instruct:free",
-        "google/learnlm-1.5-pro-experimental:free",
         "meta-llama/llama-3.1-405b-instruct:free",
+        "google/learnlm-1.5-pro-experimental:free",
+        "meta-llama/llama-3.1-70b-instruct:free",
         "liquid/lfm-40b:free",
         "google/gemini-exp-1114",
         "google/gemma-2-9b-it:free",
@@ -113,22 +113,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         "  * Lead to unexpected insights\n" +
         "  * Support natural knowledge expansion\n\n" +
         "IMPORTANT: Limit to five sentences and return only the exploratory prompt.",
-        codebreaker: (language) =>
-            "You are crafting a code debugging lesson prompt. Create a learning prompt for " + language + " that instructs the AI to:\n" +
-            "1. Structure the lesson in three parts:\n" +
-            "   - Brief concept introduction with core syntax and usage\n" +
-            "   - Be concise and to the point\n" +
-            "   - Debugging game with intentionally broken code\n\n" +
-            "2. For the debugging game section:\n" +
-            "   - Present code snippets that appear correct but have subtle issues\n" +
-            "   - Ask students to identify what's wrong with the code and have them send the code again.\n" +
-            "3. Include instructions for:\n" +
-            "  - Stay relevant to the topic, even if the user's input is off-topic\n" +
-            "   - Providing appropriate hints when needed\n" +
-            "   - Keeping the lesson concise but always include the full snippet and engaging\n\n" +
-            "Format your response as a direct lesson instruction, similar to:\n" +
-            "'Introduce concepts in [language]. Then, present a broken code example for students to debug and fix.'\n\n" +
-            "IMPORTANT: Return only the lesson prompt itself, without any additional commentary or explanation.",
+        codebreaker: (language) => "Introduce [concept] in " + language + ". Use short sentences to explain. Provide an example code. Ask if the student understands before moving on.\n\n" + 
+        "1. Structure the lesson in three parts:\n" + 
+        " - Briefly introduce the concept with short, clear sentences.\n" + 
+            " - Show a simple, working example code.\n" + 
+            " - After each explanation, ask a confirmation question like 'Do you understand this part?'\n" + 
+            " - Use simple questions to check comprehension.\n" + 
+            " - Present a debugging game with broken code.\n\n" + 
+        "2. For the debugging game:\n" + 
+            " - Show snippets that look correct but have issues.\n" + 
+            " - Ask students to find the problems.\n" + 
+            " - Have them submit fixed versions.\n" + 
+            " - Verify their solutions and provide feedback.\n\n" + 
+        "3. Include instructions for:\n" +
+            "- Staying on topic, even if the student strays.\n" + 
+            " - Increasing difficulty in broken code examples.\n" + 
+            " - Offering hints when needed.\n" + 
+            " - Explaining why each fix works clearly.\n\n" + 
+            " - Keeping the lesson concise and engaging.",
  
         eliminator: 
             "You are crafting a knowledge-testing game prompt. Create a clear, elimination-style prompt that instructs the AI to:\n" +

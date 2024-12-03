@@ -44,8 +44,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Add models list at the top
     const models = [
-        "meta-llama/llama-3.1-405b-instruct:free",
         "google/learnlm-1.5-pro-experimental:free",
+        "meta-llama/llama-3.1-405b-instruct:free",
         "meta-llama/llama-3.1-70b-instruct:free",
         "liquid/lfm-40b:free",
         "google/gemini-exp-1114",
@@ -113,24 +113,33 @@ document.addEventListener("DOMContentLoaded", async () => {
         "  * Lead to unexpected insights\n" +
         "  * Support natural knowledge expansion\n\n" +
         "IMPORTANT: Limit to five sentences and return only the exploratory prompt.",
-        codebreaker: (language) => "Introduce [concept] in " + language + ". Use short sentences to explain. Provide an example code. Ask if the student understands before moving on.\n\n" + 
-        "1. Structure the lesson in three parts:\n" + 
-        " - Briefly introduce the concept with short, clear sentences.\n" + 
-            " - Show a simple, working example code.\n" + 
-            " - After each explanation, ask a confirmation question like 'Do you understand this part?'\n" + 
-            " - Use simple questions to check comprehension.\n" + 
-            " - Present a debugging game with broken code.\n\n" + 
-        "2. For the debugging game:\n" + 
-            " - Show snippets that look correct but have issues.\n" + 
-            " - Ask students to find the problems.\n" + 
-            " - Have them submit fixed versions.\n" + 
-            " - Verify their solutions and provide feedback.\n\n" + 
-        "3. Include instructions for:\n" +
-            "- Staying on topic, even if the student strays.\n" + 
-            " - Increasing difficulty in broken code examples.\n" + 
-            " - Offering hints when needed.\n" + 
-            " - Explaining why each fix works clearly.\n\n" + 
-            " - Keeping the lesson concise and engaging.",
+        codebreaker: (language) => "You are a prompt writer. Create a detailed prompt that another AI will use to teach [concept] in " + language + ". Structure the prompt as follows:\n\n" +
+        "1. Instruct the teaching AI to:\n" +
+        " - Present one concept at a time\n" +
+        " - Wait for student confirmation before proceeding\n" +
+        " - Use simple examples with clear comments\n" +
+        " - Never dump multiple concepts at once\n\n" +
+        "2. Tell the teaching AI to structure each concept as:\n" +
+        " - Brief definition\n" +
+        " - Single syntax example\n" +
+        " - One practice exercise\n" +
+        " - Wait for student solution\n\n" +
+        "3. Guide the teaching AI on debugging lessons:\n" +
+        " - Show one broken code snippet at a time\n" +
+        " - Start with basic errors\n" +
+        " - Wait for student's attempt\n" +
+        " - Provide hints if needed\n\n" +
+        "4. Direct the teaching AI's interaction:\n" +
+        " - Require student confirmation between steps\n" +
+        " - Stay on current topic until understood\n" +
+        " - Provide feedback on student solutions\n" +
+        " - Only proceed when student is ready\n\n" +
+        "5. Tell the teaching AI to use these exact phrases:\n" +
+        " - 'Shall we look at the code?'\n" +
+        " - 'Try solving this example'\n" +
+        " - 'Would you like a hint?'\n" +
+        " - 'Ready for the next part?'\n\n" +
+        "Remember: You are writing instructions FOR another AI to teach. Do not execute the lesson yourself.",
  
         eliminator: 
             "You are crafting a knowledge-testing game prompt. Create a clear, elimination-style prompt that instructs the AI to:\n" +
