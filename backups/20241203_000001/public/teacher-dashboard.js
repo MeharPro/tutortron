@@ -44,8 +44,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Add models list at the top
     const models = [
-        "meta-llama/llama-3.1-405b-instruct:free",
         "google/learnlm-1.5-pro-experimental:free",
+        "meta-llama/llama-3.1-405b-instruct:free",
         "meta-llama/llama-3.1-70b-instruct:free",
         "liquid/lfm-40b:free",
         "google/gemini-exp-1114",
@@ -113,24 +113,37 @@ document.addEventListener("DOMContentLoaded", async () => {
         "  * Lead to unexpected insights\n" +
         "  * Support natural knowledge expansion\n\n" +
         "IMPORTANT: Limit to five sentences and return only the exploratory prompt.",
-        codebreaker: (language) => "Introduce [concept] in " + language + ". Use short sentences to explain. Provide an example code. Ask if the student understands before moving on.\n\n" + 
-        "1. Structure the lesson in three parts:\n" + 
-        " - Briefly introduce the concept with short, clear sentences.\n" + 
-            " - Show a simple, working example code.\n" + 
-            " - After each explanation, ask a confirmation question like 'Do you understand this part?'\n" + 
-            " - Use simple questions to check comprehension.\n" + 
-            " - Present a debugging game with broken code.\n\n" + 
-        "2. For the debugging game:\n" + 
-            " - Show snippets that look correct but have issues.\n" + 
-            " - Ask students to find the problems.\n" + 
-            " - Have them submit fixed versions.\n" + 
-            " - Verify their solutions and provide feedback.\n\n" + 
-        "3. Include instructions for:\n" +
-            "- Staying on topic, even if the student strays.\n" + 
-            " - Increasing difficulty in broken code examples.\n" + 
-            " - Offering hints when needed.\n" + 
-            " - Explaining why each fix works clearly.\n\n" + 
-            " - Keeping the lesson concise and engaging.",
+        codebreaker: (language) => "You are a prompt writer. Create instructions for a teaching AI that will teach [concept] in " + language + ". Your prompt should make the teaching AI:\n\n" +
+    "1. Start with proper setup:\n" +
+    " - Introduce itself as an interactive programming tutor\n" +
+    " - Encourage questions and interruptions\n" +
+    " - Present only one concept per interaction\n\n" +
+    "2. Structure each concept introduction as:\n" +
+    " - One-sentence definition\n" +
+    " - Real-world use case example\n" +
+    " - Basic syntax explanation\n" +
+    " - Wait for student confirmation\n\n" +
+    "3. Guide example presentation:\n" +
+    " - Show ONE simple working code example\n" +
+    " - Explain each part of the code separately\n" +
+    " - Point out common pitfalls\n" +
+    " - Ask specific questions about the code\n\n" +
+    "4. Create interactive exercises:\n" +
+    " - Give ONE clear modification task\n" +
+    " - Specify exactly what changes are needed\n" +
+    " - Ask student to explain their changes\n" +
+    " - Guide reflection on differences\n\n" +
+    "5. Teach debugging through:\n" +
+    " - One problem at a time\n" +
+    " - Progressively harder challenges\n" +
+    " - Specific questions about errors\n" +
+    " - Guided problem-solving steps\n\n" +
+    "The teaching AI should:\n" +
+    " - Stop after each major point\n" +
+    " - Ask specific, not general questions\n" +
+    " - Never show solutions before student attempts\n" +
+    " - Analyze student solutions when provided\n" +
+    "Remember: Write instructions for the teaching AI, don't create the lesson content yourself.",
  
         eliminator: 
             "You are crafting a knowledge-testing game prompt. Create a clear, elimination-style prompt that instructs the AI to:\n" +
@@ -744,7 +757,7 @@ async function loadLinks() {
         const linksList = document.getElementById('linksList');
         linksList.innerHTML = '';
 
-        // Add links in sorted order
+        // Add links in sorted order (newest first)
         links.forEach(link => {
             const linkCard = document.createElement('div');
             linkCard.className = `link-card ${link.mode.toLowerCase()}`;
@@ -759,9 +772,11 @@ async function loadLinks() {
                     <button class="delete-link-btn" onclick="deleteLink('${link.id}')">Delete Link</button>
                 </div>
             `;
+            // Append each link to maintain the sorted order
             linksList.appendChild(linkCard);
         });
     } catch (error) {
         console.error('Error loading links:', error);
+        showMessage('Failed to load links', true);
     }
 }

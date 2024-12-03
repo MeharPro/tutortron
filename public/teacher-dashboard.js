@@ -188,6 +188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     ],
                 }),
             });
+            console.log(response)
 
             if (!response.ok) {
                 // If this model fails, try the next one

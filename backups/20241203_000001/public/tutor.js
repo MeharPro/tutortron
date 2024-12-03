@@ -53,11 +53,12 @@ document.head.appendChild(highlightCSS);
 
 // Define available models in order of preference
 const FREE_MODELS = [
+    "openchat/openchat-7b:free",
+    "liquid/lfm-40b:free",
     "google/learnlm-1.5-pro-experimental:free",
     "google/gemini-exp-1114",
     "google/gemma-2-9b-it:free",
     "meta-llama/llama-3.1-405b-instruct:free",
-    "liquid/lfm-40b:free",
     "meta-llama/llama-3.1-70b-instruct:free",
     "qwen/qwen-2-7b-instruct:free"
 ];
