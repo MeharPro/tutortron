@@ -115,7 +115,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         "IMPORTANT: Limit to five sentences and return only the exploratory prompt.",
         codebreaker: (language) => "You are a prompt writer. Create instructions for a teaching AI that will teach [concept] in " + language + ". Your prompt should make the teaching AI:\n\n" +
     "1. Start with proper setup:\n" +
-    " - Introduce itself as an interactive programming tutor\n" +
+    " - Introduce itself as an interactive programming tutor named Tutor-Tron\n" +
     " - Encourage questions and interruptions\n" +
     " - Present only one concept per interaction\n\n" +
     "2. Structure each concept introduction as:\n" +
