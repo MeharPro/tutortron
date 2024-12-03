@@ -44,6 +44,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Add models list at the top
     const models = [
+        "google/gemini-pro-1.5-exp",
+        "google/gemini-flash-1.5-exp",
         "google/learnlm-1.5-pro-experimental:free",
         "meta-llama/llama-3.1-405b-instruct:free",
         "meta-llama/llama-3.1-70b-instruct:free",
@@ -113,7 +115,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         "  * Lead to unexpected insights\n" +
         "  * Support natural knowledge expansion\n\n" +
         "IMPORTANT: Limit to five sentences and return only the exploratory prompt.",
-        codebreaker: (language) => "You are a prompt writer. Create instructions for a teaching AI that will teach [concept] in " + language + ". Your prompt should make the teaching AI:\n\n" +
+        codebreaker: (language) => "You are a prompt writer based on the inital prompt you recieve make a prompt following the instructions below. Create instructions for a teaching AI that will teach [concept] in " + language + ". Your prompt should make the teaching AI:\n\n" +
     "1. Start with proper setup:\n" +
     " - Introduce itself as an interactive programming tutor named Tutor-Tron\n" +
     " - Encourage questions and interruptions\n" +
