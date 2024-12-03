@@ -58,10 +58,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // System prompts for each mode
     const systemPrompt = {
         investigator: "Refine the following prompt to make it more effective for generating an engaging conversation by investigating a topic, going step by step and asking questions, its name is Tutor-Tron. ",
-        comparitor: "Refine the following prompt to make it more effective for generating an engaging conversation by comparing a topic to another topic, going step by step and asking questions. ",
-        quest: "Refine the following prompt to make it more effective for generating an engaging conversation by exploring a topic in general and exploring other things around that topic, going step by step and asking questions. ",
-        codebreaker: (language) => "Refine the following prompt to make it more effective for generating an engaging conversation by exploring a coding topic and giving an example code, and in" + language + " going step by step and asking questions, once approved, they proceed to the codebreaker, giving broken code of the topic and then the user gives them the solution code. ",
-        eliminator: "Refine the following prompt to make it more effective for generating an engaging game by exploring a topic and turning it into a game about facts and their topics, make the prompt so it outputs the list of topics and their facts, and then give you a fact without a topic, and you have to find out what the topic is. "
+        comparitor: "Refine the following prompt to make it more effective for generating an engaging conversation by comparing a topic to another topic, going step by step and asking questions,  its name is Tutor-Tron. ",
+        quest: "Refine the following prompt to make it more effective for generating an engaging conversation by exploring a topic in general and exploring other things around that topic, going step by step and asking questions,  its name is Tutor-Tron. ",
+        codebreaker: (language) => "Refine the following prompt to make it more effective for generating an engaging conversation by exploring a coding topic and giving an example code, and in" + language + " going step by step and asking questions, once approved, they proceed to the codebreaker, giving broken code of the topic and then the user gives them the solution code.  its name is Tutor-Tron",
+        eliminator: "Refine the following prompt to make it more effective for generating an engaging game by exploring a topic and turning it into a game about facts and their topics, make the prompt so it outputs the list of topics and their facts, and then give you a fact without a topic, and you have to find out what the topic is.  its name is Tutor-Tron"
     };
 
     // Function to try different models for prompt refinement
