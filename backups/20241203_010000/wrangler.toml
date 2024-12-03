@@ -13,3 +13,17 @@ command = "npm install && npm run build"
 binding = "DB" # i.e. available in your Worker on env.DB
 database_name = "tutortron"
 database_id = "78f92ab6-7ad7-43f4-9e08-e19b530c2211"
+
+# Preview environment configuration
+[env.preview]
+name = "tutortron-preview"
+workers_dev = true
+
+[env.preview.kv_namespaces]
+binding = "TEACHERS"
+id = "5c97959983ca46f1a72169649096f5ab"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "tutortron"
+database_id = "78f92ab6-7ad7-43f4-9e08-e19b530c2211"
